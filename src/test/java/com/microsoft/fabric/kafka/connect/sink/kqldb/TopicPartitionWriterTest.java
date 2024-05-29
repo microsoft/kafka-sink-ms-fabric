@@ -75,7 +75,7 @@ public class TopicPartitionWriterTest {
         dlqMockProducer = new MockProducer<>(
                 true, new ByteArraySerializer(), new ByteArraySerializer());
         basePathCurrent = Paths.get(currentDirectory.getPath(), "testWriteStringyValuesAndOffset").toString();
-        Map<String, String> settings = getKustoConfigs(basePathCurrent, fileThreshold, flushInterval);
+        Map<String, String> settings = getKustoConfigs(basePathCurrent, fileThreshold);
         config = new KqlDbSinkConfig(settings);
     }
 
@@ -219,7 +219,7 @@ public class TopicPartitionWriterTest {
 
         // Expect to finish file after writing forth message cause of fileThreshold
         long fileThreshold2 = messages[0].length() + messages[1].length() + messages[2].length() + messages[2].length() - 1;
-        Map<String, String> settings2 = getKustoConfigs(basePathCurrent, fileThreshold2, flushInterval);
+        Map<String, String> settings2 = getKustoConfigs(basePathCurrent, fileThreshold2);
         KqlDbSinkConfig config2 = new KqlDbSinkConfig(settings2);
         TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config2, isDlqEnabled, dlqTopicName, kafkaProducer);
 
@@ -263,7 +263,7 @@ public class TopicPartitionWriterTest {
         TopicIngestionProperties propsAvro = new TopicIngestionProperties();
         propsAvro.ingestionProperties = new IngestionProperties(DATABASE, TABLE);
         propsAvro.ingestionProperties.setDataFormat(IngestionProperties.DataFormat.AVRO);
-        Map<String, String> settings2 = getKustoConfigs(basePathCurrent, fileThreshold2, flushInterval);
+        Map<String, String> settings2 = getKustoConfigs(basePathCurrent, fileThreshold2);
         KqlDbSinkConfig config2 = new KqlDbSinkConfig(settings2);
         TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsAvro, config2, isDlqEnabled, dlqTopicName, kafkaProducer);
 
@@ -353,14 +353,13 @@ public class TopicPartitionWriterTest {
 
     }
 
-    private Map<String, String> getKustoConfigs(String basePath, long fileThreshold,
-                                                long flushInterval) {
+    private Map<String, String> getKustoConfigs(String basePath, long fileThreshold) {
         Map<String, String> settings = new HashMap<>();
         settings.put("connection.string", KUSTO_INGEST_CLUSTER_URL);
         settings.put("kusto.tables.topics.mapping", "mapping");
         settings.put("tempdir.path", basePath);
         settings.put("flush.size.bytes", String.valueOf(fileThreshold));
-        settings.put("flush.interval.ms", String.valueOf(flushInterval));
+        settings.put("flush.interval.ms", String.valueOf(TopicPartitionWriterTest.flushInterval));
         return settings;
     }
 }

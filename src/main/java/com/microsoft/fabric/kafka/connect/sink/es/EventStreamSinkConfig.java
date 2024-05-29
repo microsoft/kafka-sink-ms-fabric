@@ -76,9 +76,6 @@ public class EventStreamSinkConfig extends AbstractConfig {
         LOGGER.info("Using target hub {} in format {}", eventHubName, messageFormat);
     }
 
-    public String getConnectionString() {
-        return connectionString;
-    }
     public String getEventHubName() {
         return eventHubName;
     }

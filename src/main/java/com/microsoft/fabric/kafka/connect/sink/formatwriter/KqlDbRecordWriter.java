@@ -31,7 +31,6 @@ public class KqlDbRecordWriter implements RecordWriter {
     private static final String HEADERS_FIELD = "headers";
     private static final String KEYS_FIELD = "keys";
     private static final String KEY_FIELD = "key";
-    private static final String VALUE_FIELD = "value";
 
 
     private final String filename;
