@@ -23,8 +23,6 @@ import io.confluent.kafka.serializers.NonRecordContainer;
 import static com.microsoft.fabric.kafka.connect.sink.formatwriter.FormatWriterHelper.isSchemaFormat;
 
 public class HeaderAndMetadataWriter {
-    protected static final Logger LOGGER = LoggerFactory.getLogger(HeaderAndMetadataWriter.class);
-
     public String KEY_FIELD = "key";
     public String VALUE_FIELD = "value";
 
