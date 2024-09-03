@@ -1,4 +1,4 @@
-package com.microsoft.fabric.kafka.connect.sink.kqldb;
+package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,7 +40,6 @@ import static com.microsoft.azure.kusto.ingest.IngestionProperties.DataFormat.*;
 import static com.microsoft.fabric.kafka.connect.sink.formatwriter.FormatWriterHelper.isSchemaFormat;
 
 public class TopicPartitionWriter {
-
     private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
     private static final String COMPRESSION_EXTENSION = ".gz";
     private static final String FILE_EXCEPTION_MESSAGE = "Failed to create file or write record into file for ingestion.";
@@ -56,14 +55,14 @@ public class TopicPartitionWriter {
     private final boolean isDlqEnabled;
     private final String dlqTopicName;
     private final Producer<byte[], byte[]> dlqProducer;
-    private final KqlDbSinkConfig.BehaviorOnError behaviorOnError;
+    private final EventHouseSinkConfig.BehaviorOnError behaviorOnError;
     private final ReentrantReadWriteLock reentrantReadWriteLock;
     FileWriter fileWriter;
     long currentOffset;
     Long lastCommittedOffset;
 
     public TopicPartitionWriter(TopicPartition tp, IngestClient client, TopicIngestionProperties ingestionProps,
-                                KqlDbSinkConfig config, boolean isDlqEnabled, String dlqTopicName, Producer<byte[], byte[]> dlqProducer) {
+                                @NotNull EventHouseSinkConfig config, boolean isDlqEnabled, String dlqTopicName, Producer<byte[], byte[]> dlqProducer) {
         this.tp = tp;
         this.client = client;
         this.ingestionProps = ingestionProps;
@@ -107,11 +106,11 @@ public class TopicPartitionWriter {
                         continue;
                     }
                 }
-                log.info(String.format("Kusto ingestion: file (%s) of size (%s) at current offset (%s) " +
-                                "to target table (%s) in database (%s)",
+                log.info("Kusto ingestion: file ({}) of size ({}) at current offset ({}) " +
+                                "to target table ({}) in database ({})",
                         fileDescriptor.path, fileDescriptor.rawBytes, currentOffset,
                         ingestionProps.ingestionProperties.getTableName(),
-                        ingestionProps.ingestionProperties.getDatabaseName()));
+                        ingestionProps.ingestionProperties.getDatabaseName());
                 this.lastCommittedOffset = currentOffset;
                 return;
             } catch (IngestionServiceException exception) {
@@ -131,7 +130,7 @@ public class TopicPartitionWriter {
         }
     }
 
-    private boolean hasStreamingSucceeded(IngestionStatus status) {
+    private boolean hasStreamingSucceeded(@NotNull IngestionStatus status) {
         switch (status.status) {
             case Succeeded:
             case Queued:
@@ -158,7 +157,8 @@ public class TopicPartitionWriter {
         return false;
     }
 
-    private void backOffForRemainingAttempts(int retryAttempts, Exception exception, SourceFile fileDescriptor) {
+    private void backOffForRemainingAttempts(int retryAttempts, Exception exception, @NotNull SourceFile fileDescriptor) {
+        String message = String.format("Writing %s failed records to miscellaneous dead-letter queue topic %s", fileDescriptor.records.size(), dlqTopicName);
         if (retryAttempts < maxRetryAttempts) {
             // RetryUtil can be deleted if exponential backOff is not required, currently using constant backOff.
             // long sleepTimeMs = RetryUtil.computeExponentialBackOffWithJitter(retryAttempts, TimeUnit.SECONDS.toMillis(5));
@@ -167,23 +167,23 @@ public class TopicPartitionWriter {
             try {
                 TimeUnit.MILLISECONDS.sleep(sleepTimeMs);
             } catch (InterruptedException interruptedErr) {
-                if (isDlqEnabled && behaviorOnError != KqlDbSinkConfig.BehaviorOnError.FAIL) {
-                    log.warn("Writing {} failed records to miscellaneous dead-letter queue topic={}", fileDescriptor.records.size(), dlqTopicName);
+                if (isDlqEnabled && behaviorOnError != EventHouseSinkConfig.BehaviorOnError.FAIL) {
+                    log.warn(message);
                     fileDescriptor.records.forEach(this::sendFailedRecordToDlq);
                 }
                 throw new ConnectException(String.format("Retrying ingesting records into KustoDB was interuppted after retryAttempts=%s", retryAttempts + 1),
                         exception);
             }
         } else {
-            if (isDlqEnabled && behaviorOnError != KqlDbSinkConfig.BehaviorOnError.FAIL) {
-                log.warn("Writing {} failed records to miscellaneous dead-letter queue topic={}", fileDescriptor.records.size(), dlqTopicName);
+            if (isDlqEnabled && behaviorOnError != EventHouseSinkConfig.BehaviorOnError.FAIL) {
+                log.warn(message);
                 fileDescriptor.records.forEach(this::sendFailedRecordToDlq);
             }
             throw new ConnectException("Retry attempts exhausted, failed to ingest records into KustoDB.", exception);
         }
     }
 
-    public void sendFailedRecordToDlq(SinkRecord record) {
+    public void sendFailedRecordToDlq(@NotNull SinkRecord record) {
         byte[] recordKey = String.format("Failed to write record to KustoDB with the following kafka coordinates, "
                         + "topic=%s, partition=%s, offset=%s.",
                 record.topic(),
@@ -226,9 +226,9 @@ public class TopicPartitionWriter {
     }
 
     private void handleErrors(SinkRecord record, Exception ex) {
-        if (KqlDbSinkConfig.BehaviorOnError.FAIL == behaviorOnError) {
+        if (EventHouseSinkConfig.BehaviorOnError.FAIL == behaviorOnError) {
             throw new ConnectException(FILE_EXCEPTION_MESSAGE, ex);
-        } else if (KqlDbSinkConfig.BehaviorOnError.LOG == behaviorOnError) {
+        } else if (EventHouseSinkConfig.BehaviorOnError.LOG == behaviorOnError) {
             log.error(FILE_EXCEPTION_MESSAGE, ex);
             sendFailedRecordToDlq(record);
         } else {
@@ -294,4 +294,3 @@ public class TopicPartitionWriter {
         return updatedIngestionProperties;
     }
 }
-

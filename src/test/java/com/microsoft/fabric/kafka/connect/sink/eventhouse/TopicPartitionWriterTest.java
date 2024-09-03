@@ -1,4 +1,4 @@
-package com.microsoft.fabric.kafka.connect.sink.kqldb;
+package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -47,7 +47,7 @@ public class TopicPartitionWriterTest {
     private static final TopicIngestionProperties propsCsv = new TopicIngestionProperties();
     private static final TopicPartition tp = new TopicPartition("testPartition", 11);
     private static final long contextSwitchInterval = 200;
-    private static KqlDbSinkConfig config;
+    private static EventHouseSinkConfig config;
     // TODO: should probably find a better way to mock internal class (FileWriter)...
     private File currentDirectory;
     private String basePathCurrent;
@@ -76,7 +76,7 @@ public class TopicPartitionWriterTest {
                 true, new ByteArraySerializer(), new ByteArraySerializer());
         basePathCurrent = Paths.get(currentDirectory.getPath(), "testWriteStringyValuesAndOffset").toString();
         Map<String, String> settings = getKustoConfigs(basePathCurrent, fileThreshold);
-        config = new KqlDbSinkConfig(settings);
+        config = new EventHouseSinkConfig(settings);
     }
 
     @AfterEach
@@ -220,7 +220,7 @@ public class TopicPartitionWriterTest {
         // Expect to finish file after writing forth message cause of fileThreshold
         long fileThreshold2 = messages[0].length() + messages[1].length() + messages[2].length() + messages[2].length() - 1;
         Map<String, String> settings2 = getKustoConfigs(basePathCurrent, fileThreshold2);
-        KqlDbSinkConfig config2 = new KqlDbSinkConfig(settings2);
+        EventHouseSinkConfig config2 = new EventHouseSinkConfig(settings2);
         TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config2, isDlqEnabled, dlqTopicName, kafkaProducer);
 
         writer.open();
@@ -264,7 +264,7 @@ public class TopicPartitionWriterTest {
         propsAvro.ingestionProperties = new IngestionProperties(DATABASE, TABLE);
         propsAvro.ingestionProperties.setDataFormat(IngestionProperties.DataFormat.AVRO);
         Map<String, String> settings2 = getKustoConfigs(basePathCurrent, fileThreshold2);
-        KqlDbSinkConfig config2 = new KqlDbSinkConfig(settings2);
+        EventHouseSinkConfig config2 = new EventHouseSinkConfig(settings2);
         TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsAvro, config2, isDlqEnabled, dlqTopicName, kafkaProducer);
 
         writer.open();
