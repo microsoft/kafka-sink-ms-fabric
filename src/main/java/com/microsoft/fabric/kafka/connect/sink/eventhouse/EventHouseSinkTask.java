@@ -1,4 +1,4 @@
-package com.microsoft.fabric.kafka.connect.sink.kqldb;
+package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
 import java.io.IOException;
 import java.util.*;
@@ -35,35 +35,31 @@ import com.microsoft.fabric.kafka.connect.sink.Version;
  * Currently only ingested files are "committed" in the sense that we can
  * advance the offset according to it.
  */
-public class KqlDbSinkTask extends SinkTask {
-
-    public static final String FETCH_TABLE_COMMAND = "%s | count";
-    private static final Logger log = LoggerFactory.getLogger(KqlDbSinkTask.class);
-    private static final ClientRequestProperties validateOnlyClientRequestProperties = new ClientRequestProperties();
+public class EventHouseSinkTask extends SinkTask {
+    private static final Logger log = LoggerFactory.getLogger(EventHouseSinkTask.class);
     private final Set<TopicPartition> assignment;
     protected IngestClient kustoIngestClient;
     protected IngestClient streamingIngestClient;
     protected Map<TopicPartition, TopicPartitionWriter> writers;
     private Map<String, TopicIngestionProperties> topicsToIngestionProps;
-    private KqlDbSinkConfig config;
+    private EventHouseSinkConfig config;
     private boolean isDlqEnabled;
     private String dlqTopicName;
     private Producer<byte[], byte[]> dlqProducer;
 
-    public KqlDbSinkTask() {
+    public EventHouseSinkTask() {
         assignment = new HashSet<>();
         writers = new HashMap<>();
-        validateOnlyClientRequestProperties.setOption("validate_permissions", true);
         // TODO we should check ingestor role differently
     }
 
-    private static boolean isStreamingEnabled(@NotNull KqlDbSinkConfig config) throws JsonProcessingException {
+    private static boolean isStreamingEnabled(@NotNull EventHouseSinkConfig config) throws JsonProcessingException {
         return Arrays.stream(config.getTopicToTableMapping()).anyMatch(TopicToTableMapping::isStreaming);
     }
 
-    public static @NotNull ConnectionStringBuilder createKustoEngineConnectionString(@NotNull KqlDbSinkConfig config) {
+    public static @NotNull ConnectionStringBuilder createKustoEngineConnectionString(@NotNull EventHouseSinkConfig config) {
         ConnectionStringBuilder kcsb = new ConnectionStringBuilder(config.getConnectionString());
-        if (Objects.requireNonNull(config.getAuthStrategy()) == KqlDbSinkConfig.KustoAuthenticationStrategy.AZ_DEV_TOKEN) {
+        if (Objects.requireNonNull(config.getAuthStrategy()) == EventHouseSinkConfig.KustoAuthenticationStrategy.AZ_DEV_TOKEN) {
             log.warn("Using DEV-TEST mode, use this for development only. NOT recommended for production scenarios");
             kcsb = ConnectionStringBuilder.createWithAadAccessTokenAuthentication(
                     kcsb.getClusterUrl(),
@@ -73,12 +69,13 @@ public class KqlDbSinkTask extends SinkTask {
                     "provide valid credentials. Either Kusto managed identity or " +
                     "Kusto appId, appKey, and authority should be configured.");
         }
-        kcsb.setConnectorDetails(Version.CLIENT_NAME, Version.getVersion(), null, null, false, null, Pair.emptyArray());
+        kcsb.setConnectorDetails(Version.CLIENT_NAME, Version.getVersion(), null, null,
+                false, null, Pair.emptyArray());
         return kcsb;
     }
 
 
-    public static Map<String, TopicIngestionProperties> getTopicsToIngestionProps(KqlDbSinkConfig config) {
+    public static Map<String, TopicIngestionProperties> getTopicsToIngestionProps(EventHouseSinkConfig config) {
         Map<String, TopicIngestionProperties> result = new HashMap<>();
 
         try {
@@ -106,7 +103,7 @@ public class KqlDbSinkTask extends SinkTask {
         }
     }
 
-    public void createKustoIngestClient(KqlDbSinkConfig config) {
+    public void createKustoIngestClient(EventHouseSinkConfig config) {
         try {
             HttpClientProperties httpClientProperties = null;
             if (StringUtils.isNotEmpty(config.getConnectionProxyHost()) && config.getConnectionProxyPort() > -1) {
@@ -181,7 +178,7 @@ public class KqlDbSinkTask extends SinkTask {
 
     @Override
     public void start(Map<String, String> props) {
-        config = new KqlDbSinkConfig(props);
+        config = new EventHouseSinkConfig(props);
         String url = config.getConnectionString();
         if (config.isDlqEnabled()) {
             isDlqEnabled = true;
@@ -213,7 +210,7 @@ public class KqlDbSinkTask extends SinkTask {
     @Override
     public void stop() {
         log.warn("Stopping KustoSinkTask");
-        // First stop so that no more ingestions trigger from timer flushes
+        // First stop so that no more ingestion trigger from timer flushes
         for (TopicPartitionWriter writer : writers.values()) {
             writer.stop();
         }

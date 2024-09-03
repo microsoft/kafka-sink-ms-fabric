@@ -1,4 +1,4 @@
-package com.microsoft.fabric.kafka.connect.sink.kqldb;
+package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
 import java.io.*;
 import java.util.Map;
@@ -40,7 +40,7 @@ public class FileWriter implements Closeable {
     private final long fileThreshold;
     // Lock is given from TopicPartitionWriter to lock while ingesting
     private final ReentrantReadWriteLock reentrantReadWriteLock;
-    private final KqlDbSinkConfig.BehaviorOnError behaviorOnError;
+    private final EventHouseSinkConfig.BehaviorOnError behaviorOnError;
     SourceFile currentFile;
     private Timer timer;
     private GZIPOutputStream outputStream;
@@ -68,7 +68,7 @@ public class FileWriter implements Closeable {
                       long flushInterval,
                       ReentrantReadWriteLock reentrantLock,
                       IngestionProperties.DataFormat format,
-                      KqlDbSinkConfig.BehaviorOnError behaviorOnError,
+                      EventHouseSinkConfig.BehaviorOnError behaviorOnError,
                       boolean isDlqEnabled) {
         this.getFilePath = getFilePath;
         this.basePath = basePath;
@@ -100,12 +100,11 @@ public class FileWriter implements Closeable {
         String filePath = getFilePath.apply(offset);
         fileProps.path = filePath;
         // Sanitize the file name just be sure and make sure it has the R/W permissions only
-
         String sanitizedFilePath = FilenameUtils.normalize(filePath);
         if (sanitizedFilePath == null) {
             /*
              * This condition should not occur at all. The files are created in controlled manner with the names consisting DB name, table name. This does not
-             * permit names like "../../" or "./" etc. Still adding an additional check.
+             * permit names like "../../" or "./" etc. Still adding a check.
              */
             String errorMessage = String.format("Exception creating local file for write." +
                     "File %s has a non canonical path", filePath);
@@ -190,9 +189,9 @@ public class FileWriter implements Closeable {
     }
 
     private void handleErrors(String message, Exception e) {
-        if (KqlDbSinkConfig.BehaviorOnError.FAIL == behaviorOnError) {
+        if (EventHouseSinkConfig.BehaviorOnError.FAIL == behaviorOnError) {
             throw new ConnectException(message, e);
-        } else if (KqlDbSinkConfig.BehaviorOnError.LOG == behaviorOnError) {
+        } else if (EventHouseSinkConfig.BehaviorOnError.LOG == behaviorOnError) {
             log.error("{}", message, e);
         } else {
             log.debug("{}", message, e);

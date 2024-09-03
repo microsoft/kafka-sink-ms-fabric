@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.microsoft.fabric.kafka.connect.sink.kqldb.KqlDbSinkConfig;
-import com.microsoft.fabric.kafka.connect.sink.kqldb.TopicToTableMapping;
+import com.microsoft.fabric.kafka.connect.sink.eventhouse.EventHouseSinkConfig;
+import com.microsoft.fabric.kafka.connect.sink.eventhouse.TopicToTableMapping;
 
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -23,19 +23,19 @@ public class FabricSinkConnectorConfigTest {
     @Test
     public void shouldAcceptValidConfig() {
         // Adding required Configuration with no default value.
-        KqlDbSinkConfig config = new KqlDbSinkConfig(setupConfigs());
+        EventHouseSinkConfig config = new EventHouseSinkConfig(setupConfigs());
         Assertions.assertNotNull(config);
     }
 
     @Test
     public void shouldHaveDefaultValues() {
         // Adding required Configuration with no default value.
-        KqlDbSinkConfig config = new KqlDbSinkConfig(setupConfigs());
+        EventHouseSinkConfig config = new EventHouseSinkConfig(setupConfigs());
         Assertions.assertNotNull(config.getConnectionString());
         Assertions.assertTrue(config.getFlushSizeBytes() > 0);
         Assertions.assertTrue(config.getFlushInterval() > 0);
         Assertions.assertFalse(config.isDlqEnabled());
-        Assertions.assertEquals(KqlDbSinkConfig.BehaviorOnError.FAIL, config.getBehaviorOnError());
+        Assertions.assertEquals(EventHouseSinkConfig.BehaviorOnError.FAIL, config.getBehaviorOnError());
     }
 
     @Test
@@ -43,7 +43,7 @@ public class FabricSinkConnectorConfigTest {
         // Adding required Configuration with no default value.
         HashMap<String, String> settings = setupConfigs();
         settings.remove("kusto.ingestion.url");
-        Assertions.assertThrows(ConfigException.class, () -> new KqlDbSinkConfig(settings));
+        Assertions.assertThrows(ConfigException.class, () -> new EventHouseSinkConfig(settings));
     }
 
     @Test
@@ -52,7 +52,7 @@ public class FabricSinkConnectorConfigTest {
         HashMap<String, String> settings = setupConfigs();
         settings.remove("kusto.ingestion.url");
         settings.put("behavior.on.error", "DummyValue");
-        Assertions.assertThrows(ConfigException.class, () -> new KqlDbSinkConfig(settings));
+        Assertions.assertThrows(ConfigException.class, () -> new EventHouseSinkConfig(settings));
     }
 
     @Test
@@ -60,7 +60,7 @@ public class FabricSinkConnectorConfigTest {
         HashMap<String, String> settings = setupConfigs();
         settings.put("misc.deadletterqueue.bootstrap.servers", "localhost:8081,localhost:8082");
         settings.put("misc.deadletterqueue.topic.name", "dlq-error-topic");
-        KqlDbSinkConfig config = new KqlDbSinkConfig(settings);
+        EventHouseSinkConfig config = new EventHouseSinkConfig(settings);
         Assertions.assertTrue(config.isDlqEnabled());
         Assertions.assertEquals(Arrays.asList("localhost:8081", "localhost:8082"), config.getDlqBootstrapServers());
         Assertions.assertEquals("dlq-error-topic", config.getDlqTopicName());
@@ -73,7 +73,7 @@ public class FabricSinkConnectorConfigTest {
         settings.put("misc.deadletterqueue.security.protocol", "SASL_PLAINTEXT");
         settings.put("misc.deadletterqueue.sasl.mechanism", "PLAIN");
         try {
-            KqlDbSinkConfig config = new KqlDbSinkConfig(settings);
+            EventHouseSinkConfig config = new EventHouseSinkConfig(settings);
             Assertions.assertNotNull(config);
             Properties dlqProps = config.getDlqProps();
             Assertions.assertEquals("SASL_PLAINTEXT", dlqProps.get("security.protocol"));
@@ -85,7 +85,7 @@ public class FabricSinkConnectorConfigTest {
 
     @Test
     public void shouldNotPerformTableValidationByDefault() {
-        KqlDbSinkConfig config = new KqlDbSinkConfig(setupConfigs());
+        EventHouseSinkConfig config = new EventHouseSinkConfig(setupConfigs());
         Assertions.assertFalse(config.getEnableTableValidation());
     }
 
@@ -94,7 +94,7 @@ public class FabricSinkConnectorConfigTest {
         Arrays.asList(Boolean.valueOf("true"), Boolean.valueOf("false")).forEach(enableValidation -> {
             HashMap<String, String> settings = setupConfigs();
             settings.put("kusto.validation.table.enable", enableValidation.toString());
-            KqlDbSinkConfig config = new KqlDbSinkConfig(settings);
+            EventHouseSinkConfig config = new EventHouseSinkConfig(settings);
             Assertions.assertEquals(enableValidation, config.getEnableTableValidation());
         });
     }
@@ -104,14 +104,14 @@ public class FabricSinkConnectorConfigTest {
         HashMap<String, String> settings = setupConfigs();
         settings.remove("aad.auth.appkey");
         settings.put("aad.auth.strategy","managed_identity");
-        KqlDbSinkConfig config = new KqlDbSinkConfig(settings);
+        EventHouseSinkConfig config = new EventHouseSinkConfig(settings);
         Assertions.assertNotNull(config);
     }
 
     @Test
     public void shouldDeserializeTablesMappings() throws JsonProcessingException {
         HashMap<String, String> settings = setupConfigs();
-        KqlDbSinkConfig config = new KqlDbSinkConfig(settings);
+        EventHouseSinkConfig config = new EventHouseSinkConfig(settings);
         Assertions.assertArrayEquals(
                 new TopicToTableMapping[] {
                         new TopicToTableMapping(null, "csv", "table1", "db1", "topic1", false),
@@ -129,7 +129,7 @@ public class FabricSinkConnectorConfigTest {
 
         Assertions.assertThrows(
                 ConfigException.class,
-                () -> new KqlDbSinkConfig(settings).getTopicToTableMapping());
+                () -> new EventHouseSinkConfig(settings).getTopicToTableMapping());
     }
 
     @Test
@@ -141,7 +141,7 @@ public class FabricSinkConnectorConfigTest {
 
         Assertions.assertThrows(
                 ConfigException.class,
-                () -> new KqlDbSinkConfig(settings).getTopicToTableMapping());
+                () -> new EventHouseSinkConfig(settings).getTopicToTableMapping());
     }
 
     @Test
@@ -153,7 +153,7 @@ public class FabricSinkConnectorConfigTest {
 
         Assertions.assertThrows(
                 ConfigException.class,
-                () -> new KqlDbSinkConfig(settings).getTopicToTableMapping());
+                () -> new EventHouseSinkConfig(settings).getTopicToTableMapping());
     }
 
     public static HashMap<String, String> setupConfigs() {

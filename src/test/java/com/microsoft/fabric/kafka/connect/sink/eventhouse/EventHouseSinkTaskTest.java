@@ -1,4 +1,4 @@
-package com.microsoft.fabric.kafka.connect.sink.kqldb;
+package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
 import java.io.File;
 import java.io.IOException;
@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @Disabled
-public class KqlDbSinkTaskTest {
+public class EventHouseSinkTaskTest {
     File currentDirectory;
 
     @BeforeEach
@@ -50,31 +50,31 @@ public class KqlDbSinkTaskTest {
     @Test
     public void testSinkTaskOpen() {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
-        KqlDbSinkTask kqlDbSinkTaskSpy = spy(kqlDbSinkTask);
-        kqlDbSinkTaskSpy.start(configs);
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
+        EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+        eventHouseSinkTaskSpy.start(configs);
         ArrayList<TopicPartition> tps = new ArrayList<>();
         tps.add(new TopicPartition("topic1", 1));
         tps.add(new TopicPartition("topic1", 2));
         tps.add(new TopicPartition("topic2", 1));
-        kqlDbSinkTaskSpy.open(tps);
-        assertEquals(3, kqlDbSinkTaskSpy.writers.size());
+        eventHouseSinkTaskSpy.open(tps);
+        assertEquals(3, eventHouseSinkTaskSpy.writers.size());
     }
 
     @Test
     public void testSinkTaskPutRecord() {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
-        KqlDbSinkTask kqlDbSinkTaskSpy = spy(kqlDbSinkTask);
-        kqlDbSinkTaskSpy.start(configs);
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
+        EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+        eventHouseSinkTaskSpy.start(configs);
         ArrayList<TopicPartition> tps = new ArrayList<>();
         TopicPartition tp = new TopicPartition("topic1", 1);
         tps.add(tp);
-        kqlDbSinkTaskSpy.open(tps);
+        eventHouseSinkTaskSpy.open(tps);
         List<SinkRecord> records = new ArrayList<>();
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, null, "stringy message".getBytes(StandardCharsets.UTF_8), 10));
-        kqlDbSinkTaskSpy.put(records);
-        assertEquals(10, kqlDbSinkTaskSpy.writers.get(tp).currentOffset);
+        eventHouseSinkTaskSpy.put(records);
+        assertEquals(10, eventHouseSinkTaskSpy.writers.get(tp).currentOffset);
     }
 
     @Test
@@ -82,17 +82,17 @@ public class KqlDbSinkTaskTest {
         try {
             HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
             configs.put("tempdir.path", System.getProperty("java.io.tmpdir"));
-            KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
-            KqlDbSinkTask kqlDbSinkTaskSpy = spy(kqlDbSinkTask);
-            kqlDbSinkTaskSpy.start(configs);
+            EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
+            EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+            eventHouseSinkTaskSpy.start(configs);
             ArrayList<TopicPartition> tps = new ArrayList<>();
             tps.add(new TopicPartition("topic1", 1));
-            kqlDbSinkTaskSpy.open(tps);
+            eventHouseSinkTaskSpy.open(tps);
             List<SinkRecord> records = new ArrayList<>();
             records.add(
                     new SinkRecord("topic2", 1, null, null, null, "stringy message".getBytes(StandardCharsets.UTF_8),
                             10));
-            Throwable exception = assertThrows(ConnectException.class, () -> kqlDbSinkTaskSpy.put(records));
+            Throwable exception = assertThrows(ConnectException.class, () -> eventHouseSinkTaskSpy.put(records));
             assertEquals("Received a record without a mapped writer for topic:partition(topic2:1), dropping record.",
                     exception.getMessage());
         } catch (Exception ex) {
@@ -104,62 +104,62 @@ public class KqlDbSinkTaskTest {
     @Test
     public void getTable() {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
-        KqlDbSinkTask kqlDbSinkTaskSpy = spy(kqlDbSinkTask);
-        kqlDbSinkTaskSpy.start(configs);
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
+        EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+        eventHouseSinkTaskSpy.start(configs);
         {
             // single table mapping should cause all topics to be mapped to a single table
-            assertEquals("db1", kqlDbSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getDatabaseName());
-            assertEquals("table1", kqlDbSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getTableName());
-            assertEquals(IngestionProperties.DataFormat.CSV, kqlDbSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getDataFormat());
-            assertEquals("Mapping", kqlDbSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getIngestionMapping().getIngestionMappingReference());
-            assertEquals("db2", kqlDbSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getDatabaseName());
-            assertEquals("table2", kqlDbSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getTableName());
-            assertEquals(IngestionProperties.DataFormat.JSON, kqlDbSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getDataFormat());
-            Assertions.assertNull(kqlDbSinkTaskSpy.getIngestionProps("topic3"));
+            assertEquals("db1", eventHouseSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getDatabaseName());
+            assertEquals("table1", eventHouseSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getTableName());
+            assertEquals(IngestionProperties.DataFormat.CSV, eventHouseSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getDataFormat());
+            assertEquals("Mapping", eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getIngestionMapping().getIngestionMappingReference());
+            assertEquals("db2", eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getDatabaseName());
+            assertEquals("table2", eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getTableName());
+            assertEquals(IngestionProperties.DataFormat.JSON, eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getDataFormat());
+            Assertions.assertNull(eventHouseSinkTaskSpy.getIngestionProps("topic3"));
         }
     }
 
     @Test
     public void getTableWithoutMapping() {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
-        KqlDbSinkTask kqlDbSinkTaskSpy = spy(kqlDbSinkTask);
-        kqlDbSinkTaskSpy.start(configs);
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
+        EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+        eventHouseSinkTaskSpy.start(configs);
         {
             // single table mapping should cause all topics to be mapped to a single table
-            assertEquals("db1", kqlDbSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getDatabaseName());
-            assertEquals("table1", kqlDbSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getTableName());
-            assertEquals(IngestionProperties.DataFormat.CSV, kqlDbSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getDataFormat());
-            assertEquals("db2", kqlDbSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getDatabaseName());
-            assertEquals("table2", kqlDbSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getTableName());
-            assertEquals(IngestionProperties.DataFormat.JSON, kqlDbSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getDataFormat());
-            Assertions.assertNull(kqlDbSinkTaskSpy.getIngestionProps("topic3"));
+            assertEquals("db1", eventHouseSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getDatabaseName());
+            assertEquals("table1", eventHouseSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getTableName());
+            assertEquals(IngestionProperties.DataFormat.CSV, eventHouseSinkTaskSpy.getIngestionProps("topic1").ingestionProperties.getDataFormat());
+            assertEquals("db2", eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getDatabaseName());
+            assertEquals("table2", eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getTableName());
+            assertEquals(IngestionProperties.DataFormat.JSON, eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties.getDataFormat());
+            Assertions.assertNull(eventHouseSinkTaskSpy.getIngestionProps("topic3"));
         }
     }
 
     @Test
     public void closeTaskAndWaitToFinish() {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
-        KqlDbSinkTask kqlDbSinkTaskSpy = spy(kqlDbSinkTask);
-        kqlDbSinkTaskSpy.start(configs);
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
+        EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+        eventHouseSinkTaskSpy.start(configs);
         ArrayList<TopicPartition> tps = new ArrayList<>();
         tps.add(new TopicPartition("topic1", 1));
         tps.add(new TopicPartition("topic2", 2));
         tps.add(new TopicPartition("topic2", 3));
-        kqlDbSinkTaskSpy.open(tps);
+        eventHouseSinkTaskSpy.open(tps);
         // Clean fast close
         long l1 = System.currentTimeMillis();
-        kqlDbSinkTaskSpy.close(tps);
+        eventHouseSinkTaskSpy.close(tps);
         long l2 = System.currentTimeMillis();
         assertTrue(l2 - l1 < 1000);
         // Check close time when one close takes time to close
         TopicPartition tp = new TopicPartition("topic2", 4);
         IngestClient mockedClient = mock(IngestClient.class);
         TopicIngestionProperties props = new TopicIngestionProperties();
-        props.ingestionProperties = kqlDbSinkTaskSpy.getIngestionProps("topic2").ingestionProperties;
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, new KqlDbSinkConfig(configs), false, null, null);
+        props.ingestionProperties = eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties;
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, new EventHouseSinkConfig(configs), false, null, null);
         TopicPartitionWriter writerSpy = spy(writer);
         long sleepTime = 2 * 1000;
         Answer<Void> answer = invocation -> {
@@ -167,11 +167,11 @@ public class KqlDbSinkTaskTest {
             return null;
         };
         doAnswer(answer).when(writerSpy).close();
-        kqlDbSinkTaskSpy.open(tps);
+        eventHouseSinkTaskSpy.open(tps);
         writerSpy.open();
         tps.add(tp);
-        kqlDbSinkTaskSpy.writers.put(tp, writerSpy);
-        kqlDbSinkTaskSpy.close(tps);
+        eventHouseSinkTaskSpy.writers.put(tp, writerSpy);
+        eventHouseSinkTaskSpy.close(tps);
         long l3 = System.currentTimeMillis();
         System.out.println("l3-l2 " + (l3 - l2));
         assertTrue(l3 - l2 > sleepTime && l3 - l2 < sleepTime + 1000);
@@ -182,10 +182,10 @@ public class KqlDbSinkTaskTest {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
         configs.put("flush.interval.ms", "100");
         configs.put("kusto.validation.table.enable", "true");
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
-        KqlDbSinkTask kqlDbSinkTaskSpy = spy(kqlDbSinkTask);
-        kqlDbSinkTaskSpy.start(configs);
-        KqlDbSinkConfig kqlDbSinkConfig = new KqlDbSinkConfig(configs);
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
+        EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+        eventHouseSinkTaskSpy.start(configs);
+        EventHouseSinkConfig eventHouseSinkConfig = new EventHouseSinkConfig(configs);
     }
 
     @Test
@@ -197,13 +197,13 @@ public class KqlDbSinkTaskTest {
         doNothing().when(mockPartitionWriter).close();
         IngestClient mockClient = mock(IngestClient.class);
         doNothing().when(mockClient).close();
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
         // There is no mutate constructor
-        kqlDbSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
-        kqlDbSinkTask.kustoIngestClient = mockClient;
+        eventHouseSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
+        eventHouseSinkTask.kustoIngestClient = mockClient;
 
         // when
-        kqlDbSinkTask.stop();
+        eventHouseSinkTask.stop();
 
         // then
         verify(mockClient, times(1)).close();
@@ -217,7 +217,7 @@ public class KqlDbSinkTaskTest {
         final Logger logger = Logger.getRootLogger();
         logger.addAppender(appender);
         try {
-            Logger.getLogger(KqlDbSinkTask.class).error("Error closing kusto client");
+            Logger.getLogger(EventHouseSinkTask.class).error("Error closing kusto client");
         } finally {
             logger.removeAppender(appender);
             logger.removeAllAppenders();
@@ -228,10 +228,10 @@ public class KqlDbSinkTaskTest {
         doThrow(RuntimeException.class).when(mockPartitionWriter).close();
         IngestClient mockClient = mock(IngestClient.class);
         doNothing().when(mockClient).close();
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
         // There is no mutate constructor
-        kqlDbSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
-        kqlDbSinkTask.kustoIngestClient = mockClient;
+        eventHouseSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
+        eventHouseSinkTask.kustoIngestClient = mockClient;
         final List<LoggingEvent> log = appender.getLog();
         final LoggingEvent firstLogEntry = log.get(0);
         assertEquals(firstLogEntry.getLevel().toString(), Level.ERROR.toString());
@@ -245,7 +245,7 @@ public class KqlDbSinkTaskTest {
         final Logger logger = Logger.getRootLogger();
         logger.addAppender(appender);
         try {
-            Logger.getLogger(KqlDbSinkTask.class).error("Error closing kusto client");
+            Logger.getLogger(EventHouseSinkTask.class).error("Error closing kusto client");
         } finally {
             logger.removeAppender(appender);
             logger.removeAllAppenders();
@@ -256,10 +256,10 @@ public class KqlDbSinkTaskTest {
         doNothing().when(mockPartitionWriter).close();
         IngestClient mockClient = mock(IngestClient.class);
         doThrow(IOException.class).when(mockClient).close();
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
         // There is no mutate constructor
-        kqlDbSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
-        kqlDbSinkTask.kustoIngestClient = mockClient;
+        eventHouseSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
+        eventHouseSinkTask.kustoIngestClient = mockClient;
         final List<LoggingEvent> log = appender.getLog();
         final LoggingEvent firstLogEntry = log.get(0);
         assertEquals(firstLogEntry.getLevel().toString(), Level.ERROR.toString());
@@ -270,20 +270,20 @@ public class KqlDbSinkTaskTest {
     public void precommitDoesntCommitNewerOffsets() throws InterruptedException {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
         configs.put("flush.interval.ms", "100");
-        KqlDbSinkTask kqlDbSinkTask = new KqlDbSinkTask();
-        KqlDbSinkTask kqlDbSinkTaskSpy = spy(kqlDbSinkTask);
-        kqlDbSinkTaskSpy.start(configs);
+        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
+        EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+        eventHouseSinkTaskSpy.start(configs);
         ArrayList<TopicPartition> tps = new ArrayList<>();
         TopicPartition topic1 = new TopicPartition("topic1", 1);
         tps.add(topic1);
-        kqlDbSinkTaskSpy.open(tps);
+        eventHouseSinkTaskSpy.open(tps);
         IngestClient mockedClient = mock(IngestClient.class);
         TopicIngestionProperties props = new TopicIngestionProperties();
-        props.ingestionProperties = kqlDbSinkTaskSpy.getIngestionProps("topic1").ingestionProperties;
+        props.ingestionProperties = eventHouseSinkTaskSpy.getIngestionProps("topic1").ingestionProperties;
         TopicPartitionWriter topicPartitionWriterSpy = spy(
-                new TopicPartitionWriter(topic1, mockedClient, props, new KqlDbSinkConfig(configs), false, null, null));
+                new TopicPartitionWriter(topic1, mockedClient, props, new EventHouseSinkConfig(configs), false, null, null));
         topicPartitionWriterSpy.open();
-        kqlDbSinkTaskSpy.writers.put(topic1, topicPartitionWriterSpy);
+        eventHouseSinkTaskSpy.writers.put(topic1, topicPartitionWriterSpy);
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         final Stopped stoppedObj = new Stopped();
@@ -293,7 +293,7 @@ public class KqlDbSinkTaskTest {
                 List<SinkRecord> records = new ArrayList<>();
 
                 records.add(new SinkRecord("topic1", 1, null, null, null, "stringy message".getBytes(StandardCharsets.UTF_8), offset.getAndIncrement()));
-                kqlDbSinkTaskSpy.put(new ArrayList<>(records));
+                eventHouseSinkTaskSpy.put(new ArrayList<>(records));
                 try {
                     Thread.sleep(10);
                 } catch (InterruptedException ignore) {
@@ -308,8 +308,8 @@ public class KqlDbSinkTaskTest {
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(topic1, new OffsetAndMetadata(current));
 
-        Map<TopicPartition, OffsetAndMetadata> returnedOffsets = kqlDbSinkTaskSpy.preCommit(offsets);
-        kqlDbSinkTaskSpy.close(tps);
+        Map<TopicPartition, OffsetAndMetadata> returnedOffsets = eventHouseSinkTaskSpy.preCommit(offsets);
+        eventHouseSinkTaskSpy.close(tps);
 
         // Decrease one cause preCommit adds one
         assertEquals(returnedOffsets.get(topic1).offset() - 1, topicPartitionWriterSpy.lastCommittedOffset);

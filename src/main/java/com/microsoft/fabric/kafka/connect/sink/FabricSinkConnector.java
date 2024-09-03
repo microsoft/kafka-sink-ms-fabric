@@ -16,8 +16,8 @@ import org.slf4j.LoggerFactory;
 
 import com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkConfig;
 import com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkTask;
-import com.microsoft.fabric.kafka.connect.sink.kqldb.KqlDbSinkConfig;
-import com.microsoft.fabric.kafka.connect.sink.kqldb.KqlDbSinkTask;
+import com.microsoft.fabric.kafka.connect.sink.eventhouse.EventHouseSinkConfig;
+import com.microsoft.fabric.kafka.connect.sink.eventhouse.EventHouseSinkTask;
 
 public class FabricSinkConnector extends SinkConnector {
     private static final Logger LOGGER = LoggerFactory.getLogger(FabricSinkConnector.class);
@@ -36,7 +36,7 @@ public class FabricSinkConnector extends SinkConnector {
         } else {
             LOGGER.info("Detected Eventhouse URL , using KQLDb as a target.");
             sinkType = SinkType.KQLDB;
-            config = new KqlDbSinkConfig(props);
+            config = new EventHouseSinkConfig(props);
         }
     }
 
@@ -61,10 +61,10 @@ public class FabricSinkConnector extends SinkConnector {
     @Override
     public ConfigDef config() {
         if(sinkType == SinkType.EVENTSTREAM) {
-            return EventStreamSinkConfig.getConfig();
+            return EventStreamSinkConfig.CONFIG_DEF;
         }
         else {
-            return KqlDbSinkConfig.getConfig();
+            return EventHouseSinkConfig.CONFIG_DEF;
         }
     }
 
@@ -74,7 +74,7 @@ public class FabricSinkConnector extends SinkConnector {
             return EventStreamSinkTask.class;
         }
         else {
-            return KqlDbSinkTask.class;
+            return EventHouseSinkTask.class;
         }
     }
 
