@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Stream;
 
+import com.microsoft.fabric.kafka.connect.sink.eventhouse.EventHouseRecordWriterProvider;
 import org.apache.avro.generic.GenericData;
 import org.apache.commons.io.FileUtils;
 import org.apache.kafka.connect.data.Schema;
@@ -34,8 +35,7 @@ public class KqlDbRecordWriterSchemaTests extends KqlDbRecordWriterBase {
         Schema stringToIntSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).name("StringToIntMap").build();
         Schema stringToOptionalIntSchema = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.OPTIONAL_INT32_SCHEMA).name("StringToOptionalInt").build();
         Schema arrayOfInts = SchemaBuilder.array(Schema.INT32_SCHEMA).name("ArrayOfInts").build();
-        Schema simpleLongSchema = SchemaBuilder.struct().field("recordKey", Schema.INT64_SCHEMA).
-                name("SimpleLongSchema").build();
+        Schema simpleLongSchema = SchemaBuilder.struct().field("recordKey", Schema.INT64_SCHEMA).name("SimpleLongSchema").build();
         Schema structSchema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA)
                 .field("field2", Schema.STRING_SCHEMA).name("StructSchema").build();
 
@@ -50,11 +50,10 @@ public class KqlDbRecordWriterSchemaTests extends KqlDbRecordWriterBase {
                 Arguments.of(intToIntSchema, stringToIntSchema, intToIntMap, stringToIntMap, false, false),
                 Arguments.of(stringToIntSchema, stringToOptionalIntSchema, stringToIntMap, stringToOptionalIntMap, false, false),
                 Arguments.of(stringToIntSchema, stringToOptionalIntSchema, stringToIntMap, stringToOptionalIntMapMultiple, false, false),
-                Arguments.of(stringToIntSchema, arrayOfInts, stringToIntMap, new Integer[]{1, 2, 3, 5, 8, 13, 21}, false, true),
+                Arguments.of(stringToIntSchema, arrayOfInts, stringToIntMap, new Integer[] {1, 2, 3, 5, 8, 13, 21}, false, true),
                 Arguments.of(simpleLongSchema, structSchema, Collections.singletonMap("recordKey", 42L),
                         "{\"field1\":true,\"field2\":\"Field-@42\"}", false, false),
-                Arguments.of(simpleLongSchema, structSchema, Collections.singletonMap("recordKey", 42L), null, false, false)
-        );
+                Arguments.of(simpleLongSchema, structSchema, Collections.singletonMap("recordKey", 42L), null, false, false));
     }
 
     @ParameterizedTest(name = "AVRO Data to be serialized with key schema {0} and value schema {1} isSimpleKey {2} isSimpleValue {3}")
@@ -62,17 +61,14 @@ public class KqlDbRecordWriterSchemaTests extends KqlDbRecordWriterBase {
             "avro-simple-schema.json,avro-struct-schema.json,true,false",
             "avro-struct-schema.json,avro-struct-schema.json,false,false",
             "avro-simple-schema.json,avro-simple-schema.json,true,true"
-    }
-    )
+    })
     public void validateAvroDataToBeSerialized(String keySchemaPath, String valueSchemaPath, boolean isSimpleKey, boolean isSimpleValue)
             throws IOException, JSONException {
         List<SinkRecord> records = new ArrayList<>();
         Generator randomAvroValueData = new Generator.Builder().schemaStream(
-                Objects.requireNonNull(this.getClass().getClassLoader().
-                        getResourceAsStream(String.format("avro-schemas/%s", valueSchemaPath)))).build();
+                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", valueSchemaPath)))).build();
         Generator randomAvroKeyData = new Generator.Builder().schemaStream(
-                Objects.requireNonNull(this.getClass().getClassLoader().
-                        getResourceAsStream(String.format("avro-schemas/%s", keySchemaPath)))).build();
+                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", keySchemaPath)))).build();
         AvroData avroDataCache = new AvroData(50);
         Schema keySchema = avroDataCache.toConnectSchema(randomAvroKeyData.schema());
         Schema valueSchema = avroDataCache.toConnectSchema(randomAvroValueData.schema());
@@ -89,18 +85,15 @@ public class KqlDbRecordWriterSchemaTests extends KqlDbRecordWriterBase {
                     i);
             sinkRecord.headers().addInt(String.format("HeaderInt-%s", i), i);
             records.add(sinkRecord);
-            String expectedValueString = isSimpleValue ?
-                    RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value)) :
-                    new String(converter.convertToJson((GenericData.Record) value));
-            String expectedKeyString = isSimpleKey ?
-                    key.toString() :
-                    new String(converter.convertToJson((GenericData.Record) key));
+            String expectedValueString = isSimpleValue ? RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value))
+                    : new String(converter.convertToJson((GenericData.Record) value));
+            String expectedKeyString = isSimpleKey ? key.toString() : new String(converter.convertToJson((GenericData.Record) key));
             String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(Collections.singletonMap(String.format("HeaderInt-%s", i), i));
-            expectedResultsMap.put(i, new String[]{expectedHeaderJson, expectedKeyString, expectedValueString});
+            expectedResultsMap.put(i, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
         }
         File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
         Utils.restrictPermissions(file);
-        KqlDbRecordWriterProvider writer = new KqlDbRecordWriterProvider();
+        EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
         for (SinkRecord record : records) {
@@ -118,17 +111,14 @@ public class KqlDbRecordWriterSchemaTests extends KqlDbRecordWriterBase {
             "avro-simple-schema.json,avro-struct-schema.json,true,false",
             "avro-struct-schema.json,avro-struct-schema.json,false,false",
             "avro-simple-schema.json,avro-simple-schema.json,true,true"
-    }
-    )
+    })
     public void validateJsonDataToBeSerialized(String keySchemaPath, String valueSchemaPath, boolean isSimpleKey, boolean isSimpleValue)
             throws IOException, JSONException {
         List<SinkRecord> records = new ArrayList<>();
         Generator randomAvroValueData = new Generator.Builder().schemaStream(
-                Objects.requireNonNull(this.getClass().getClassLoader().
-                        getResourceAsStream(String.format("avro-schemas/%s", valueSchemaPath)))).build();
+                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", valueSchemaPath)))).build();
         Generator randomAvroKeyData = new Generator.Builder().schemaStream(
-                Objects.requireNonNull(this.getClass().getClassLoader().
-                        getResourceAsStream(String.format("avro-schemas/%s", keySchemaPath)))).build();
+                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", keySchemaPath)))).build();
 
         Map<Integer, String[]> expectedResultsMap = new HashMap<>();
         for (int i = 0; i < 10; i++) {
@@ -143,18 +133,14 @@ public class KqlDbRecordWriterSchemaTests extends KqlDbRecordWriterBase {
             sinkRecord.headers().addInt(String.format("HeaderInt-%s", i), i);
             records.add(sinkRecord);
 
-            String expectedValueString = isSimpleValue ?
-                    RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value)) :
-                    value.toString();
-            String expectedKeyString = isSimpleKey ?
-                    RESULT_MAPPER.writeValueAsString(key) :
-                    key.toString();
+            String expectedValueString = isSimpleValue ? RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value)) : value.toString();
+            String expectedKeyString = isSimpleKey ? RESULT_MAPPER.writeValueAsString(key) : key.toString();
             String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(Collections.singletonMap(String.format("HeaderInt-%s", i), i));
-            expectedResultsMap.put(i, new String[]{expectedHeaderJson, expectedKeyString, expectedValueString});
+            expectedResultsMap.put(i, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
         }
         File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
         Utils.restrictPermissions(file);
-        KqlDbRecordWriterProvider writer = new KqlDbRecordWriterProvider();
+        EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
         for (SinkRecord record : records) {
@@ -169,8 +155,8 @@ public class KqlDbRecordWriterSchemaTests extends KqlDbRecordWriterBase {
     @ParameterizedTest(name = "Map Data to be serialized with key schema {0}.name() and value schema {1}.name()")
     @MethodSource("testMapSchemaJson")
     public void collectionsSerializationTests(Schema keySchema, Schema valueSchema,
-                                              Map<?, ?> keyValues, Object expectedValues,
-                                              boolean isSimpleKey, boolean isSimpleValue) throws IOException, JSONException {
+            Map<?, ?> keyValues, Object expectedValues,
+            boolean isSimpleKey, boolean isSimpleValue) throws IOException, JSONException {
         // Set up
         Map<Integer, String[]> expectedResultsMap = new HashMap<>();
         SinkRecord sinkRecord = new SinkRecord("json.map.record.topic", 0,
@@ -195,16 +181,16 @@ public class KqlDbRecordWriterSchemaTests extends KqlDbRecordWriterBase {
         }
         String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(
                 Collections.singletonMap(String.format("HeaderInt-%s", 0), 0));
-        expectedResultsMap.put(0, new String[]{expectedHeaderJson, expectedKeyString, expectedValueString});
+        expectedResultsMap.put(0, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
 
         // Act
         File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
         Utils.restrictPermissions(file);
-        KqlDbRecordWriterProvider writer = new KqlDbRecordWriterProvider();
+        EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
         rd.write(sinkRecord, IngestionProperties.DataFormat.JSON);
-        //verify
+        // verify
         validate(file.getPath(), expectedResultsMap);
         rd.commit();
         rd.close();

@@ -1,9 +1,7 @@
 package com.microsoft.fabric.kafka.connect.sink.es;
 
-import com.microsoft.azure.eventhubs.AuthorizationFailedException;
-import com.microsoft.azure.eventhubs.EventData;
-import com.microsoft.azure.eventhubs.EventHubClient;
-import com.microsoft.azure.eventhubs.EventHubException;
+import com.azure.messaging.eventhubs.EventData;
+import com.azure.messaging.eventhubs.EventHubProducerAsyncClient;
 import com.microsoft.fabric.kafka.connect.sink.Version;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -11,25 +9,26 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.codehaus.plexus.util.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
+
+import static com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkConfig.ES_MESSAGE_FORMAT;
 
 public class EventStreamSinkTask extends SinkTask {
     private static final Logger log = LoggerFactory.getLogger(EventStreamSinkTask.class);
     // List of EventHubClient objects to be used during data upload
-    private BlockingQueue<EventHubClient> ehClients;
-    private EventHubClientProvider provider;
+    private BlockingQueue<EventHubProducerAsyncClient> ehClients;
+    private EventStreamSinkConfig eventStreamSinkConfig;
 
     public String version() {
         return Version.getVersion();
@@ -38,9 +37,8 @@ public class EventStreamSinkTask extends SinkTask {
     @Override
     public void start(Map<String, String> props) {
         log.info("starting EventHubSinkTask");
-        EventStreamSinkConfig eventStreamSinkConfig;
         try {
-            eventStreamSinkConfig = new EventStreamSinkConfig(props);
+            this.eventStreamSinkConfig = new EventStreamSinkConfig(props);
         } catch (ConfigException ex) {
             throw new ConnectException("Couldn't start EventHubSinkTask due to configuration error", ex);
         }
@@ -53,18 +51,33 @@ public class EventStreamSinkTask extends SinkTask {
 
     @Override
     public void put(@NotNull Collection<SinkRecord> sinkRecords) {
+        boolean isTextData = StringUtils.isNotEmpty(eventStreamSinkConfig.getString(ES_MESSAGE_FORMAT)) &&
+                "json".equalsIgnoreCase(eventStreamSinkConfig.getString(ES_MESSAGE_FORMAT));
         log.debug("starting to upload {} records", sinkRecords.size());
         List<CompletableFuture<Void>> resultSet = new LinkedList<>();
         for (SinkRecord record : sinkRecords) {
-            EventData sendEvent;
-            EventHubClient ehClient = null;
+
+            EventHubProducerAsyncClient ehClient = null;
             try {
-                sendEvent = extractor.extractEventData(record);
                 // pick an event hub client to send the data asynchronously
-                ehClient = ehClients.take();
-                if (sendEvent != null) {
-                    resultSet.add(sendAsync(ehClient, sendEvent));
-                }
+                // Creating a batch without options set, will allow for automatic routing of events to any partition.
+                EventHubProducerAsyncClient finalEhClient = ehClients.take();
+                // so that this can be offered back to the queue in finally
+                ehClient = finalEhClient;
+                finalEhClient.createBatch().flatMap(batch -> {
+                    EventData sendEvent;
+                    if (isTextData) {
+                        sendEvent = new EventData(record.value().toString());
+                    } else {
+                        sendEvent = new EventData(record.va);
+                    }
+                    batch.tryAdd(sendEvent);
+                    return finalEhClient.send(batch);
+                }).subscribe(unused -> {
+                },
+                        error -> log.error("Error sending batch of records", error),
+                        () -> log.debug("Records sent successfully"));
+
             } catch (InterruptedException ex) {
                 throw new ConnectException("EventHubSinkTask interrupted while waiting to acquire client", ex);
             } finally {
@@ -73,35 +86,29 @@ public class EventStreamSinkTask extends SinkTask {
                 }
             }
         }
-        log.debug("wait for {} async uploads to finish", resultSet.size());
-        waitForAllUploads(resultSet);
         log.debug("finished uploading {} records", sinkRecords.size());
     }
 
     @Override
     public void flush(@NotNull Map<TopicPartition, OffsetAndMetadata> offsets) {
-        offsets.forEach((topicPartition, offsetAndMetadata) ->
-                log.debug("flushing topic partition {} with offset {}", topicPartition, offsetAndMetadata));
+        offsets.forEach((topicPartition, offsetAndMetadata) -> log.debug("flushing topic partition {} with offset {}",
+                topicPartition, offsetAndMetadata));
     }
 
     @Override
     public void stop() {
         log.info("stopping EventHubSinkTask");
         if (ehClients != null) {
-            for (EventHubClient ehClient : ehClients) {
+            for (EventHubProducerAsyncClient ehClient : ehClients) {
                 ehClient.close();
                 log.info("closing an Event hub Client");
             }
         }
     }
 
-    protected CompletableFuture<Void> sendAsync(@NotNull EventHubClient ehClient, EventData sendEvent) {
-        return ehClient.send(sendEvent);
-    }
-
     private void initializeEventHubClients(String connectionString, short clientsPerTask) {
         ehClients = new LinkedBlockingQueue<>(clientsPerTask);
-        provider = getClientProvider(connectionString);
+        EventHubClientProvider provider = getClientProvider(connectionString);
         try {
             for (short i = 0; i < clientsPerTask; i++) {
                 log.info("Creating event hub client - {} connectionString={} - ", i,
@@ -113,13 +120,7 @@ public class EventStreamSinkTask extends SinkTask {
                 }
                 log.info("Created an Event Hub Client");
             }
-        } catch (AuthorizationFailedException ex) {
-            log.error("Authorization failed while connecting to EventHub [connectionString={}]", EventStreamCommon.getSecureConnectionString(connectionString));
-            throw new ConnectException("Authorization error. Unable to connect to EventHub", ex);
-        } catch (EventHubException ex) {
-            log.error("Error occurred while connecting to EventHub [connectionString={}]", EventStreamCommon.getSecureConnectionString(connectionString));
-            throw new ConnectException("Exception while creating Event Hub client: " + ex.getMessage(), ex);
-        } catch (IOException ex) {
+        } catch (Exception ex) {
             throw new ConnectException("Error while connecting to EventHubs", ex);
         }
     }
@@ -128,36 +129,4 @@ public class EventStreamSinkTask extends SinkTask {
         return new EventHubClientProvider(connectionString);
     }
 
-    private void waitForAllUploads(@NotNull List<CompletableFuture<Void>> resultSet) {
-        for (CompletableFuture<Void> result : resultSet) {
-            try {
-                try {
-                    result.get();
-                } catch (ExecutionException | InterruptedException ex) {
-                    findValidRootCause(ex);
-                }
-            } catch (AuthorizationFailedException ex) {
-                log.error("Authorization failed while sending events to EventHub");
-                throw new ConnectException("Authorization error. Unable to connect to EventHub", ex);
-            } catch (EventHubException ex) {
-                log.error("Error occurred while sending events to EventHub");
-                throw new ConnectException("Exception while creating Event Hub client: " + ex.getMessage(), ex);
-            } catch (IOException ex) {
-                throw new ConnectException("Error while connecting to EventHubs", ex);
-            }
-        }
-    }
-
-    private void findValidRootCause(Exception ex) throws EventHubException, IOException {
-        Throwable rootCause = ex;
-        while (rootCause != null) {
-            rootCause = rootCause.getCause();
-            if (rootCause instanceof IOException) {
-                throw (IOException) rootCause;
-            } else if (rootCause instanceof EventHubException) {
-                throw (EventHubException) rootCause;
-            }
-        }
-        throw new IOException("Error while executing send", ex);
-    }
 }

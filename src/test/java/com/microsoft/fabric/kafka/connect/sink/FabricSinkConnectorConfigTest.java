@@ -103,7 +103,7 @@ public class FabricSinkConnectorConfigTest {
     public void shouldAllowNoPasswordIfManagedIdentityEnabled() {
         HashMap<String, String> settings = setupConfigs();
         settings.remove("aad.auth.appkey");
-        settings.put("aad.auth.strategy","managed_identity");
+        settings.put("aad.auth.strategy", "managed_identity");
         EventHouseSinkConfig config = new EventHouseSinkConfig(settings);
         Assertions.assertNotNull(config);
     }

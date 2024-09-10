@@ -1,12 +1,11 @@
-package com.microsoft.fabric.kafka.connect.sink.formatwriter;
+package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import com.microsoft.fabric.kafka.connect.sink.format.RecordWriter;
+import com.microsoft.fabric.kafka.connect.sink.formatwriter.HeaderAndMetadataWriter;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -15,33 +14,31 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
-import com.microsoft.fabric.kafka.connect.sink.format.RecordWriter;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.microsoft.fabric.kafka.connect.sink.formatwriter.FormatWriterHelper.isCsv;
 
-public class KqlDbRecordWriter implements RecordWriter {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
-    private static final Logger LOGGER = LoggerFactory.getLogger(KqlDbRecordWriter.class);
+public class EventHouseRecordWriter implements RecordWriter {
     public static final String LINE_SEPARATOR = System.lineSeparator();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+    private static final Logger LOGGER = LoggerFactory.getLogger(EventHouseRecordWriter.class);
     private static final String KAFKA_METADATA_FIELD = "kafkamd";
     private static final String HEADERS_FIELD = "headers";
     private static final String KEYS_FIELD = "keys";
     private static final String KEY_FIELD = "key";
 
-
-    private final String filename;
     private final JsonGenerator writer;
     private final OutputStream plainOutputStream;
-    private Schema schema;
     private final HeaderAndMetadataWriter headerAndMetadataWriter;
+    private Schema schema;
 
-    public KqlDbRecordWriter(String filename, OutputStream out) {
-         this.headerAndMetadataWriter = new HeaderAndMetadataWriter();
-        this.filename = filename;
+    public EventHouseRecordWriter(OutputStream out) {
+        this.headerAndMetadataWriter = new HeaderAndMetadataWriter();
         this.plainOutputStream = out;
         try {
             this.writer = OBJECT_MAPPER.getFactory()
@@ -61,7 +58,6 @@ public class KqlDbRecordWriter implements RecordWriter {
     public void write(SinkRecord record, IngestionProperties.DataFormat dataFormat) throws IOException {
         if (schema == null) {
             schema = record.valueSchema();
-            LOGGER.debug("Opening record writer for: {}", filename);
         }
         Map<String, Object> parsedHeaders = headerAndMetadataWriter.getHeadersAsMap(record);
         Map<String, String> kafkaMd = headerAndMetadataWriter.getKafkaMetaDataAsMap(record);
@@ -86,8 +82,7 @@ public class KqlDbRecordWriter implements RecordWriter {
             Collection<Map<String, Object>> parsedValues = headerAndMetadataWriter.convertSinkRecordToMap(record, false, dataFormat);
 
             parsedValues.forEach(parsedValue -> {
-                Map<String, Object> updatedValue = (record.value() == null) ? new HashMap<>() :
-                        new HashMap<>(parsedValue);
+                Map<String, Object> updatedValue = (record.value() == null) ? new HashMap<>() : new HashMap<>(parsedValue);
                 /* Add all the key fields */
                 if (record.key() != null) {
                     if (parsedKeys.size() == 1 && parsedKeys.containsKey(KEY_FIELD)) {
@@ -110,7 +105,6 @@ public class KqlDbRecordWriter implements RecordWriter {
                     writer.writeObject(updatedValue);
                     writer.writeRaw(LINE_SEPARATOR);
                 } catch (IOException e) {
-                    LOGGER.error("Error writing record to file: {}", filename, e);
                     throw new ConnectException(e);
                 }
             });

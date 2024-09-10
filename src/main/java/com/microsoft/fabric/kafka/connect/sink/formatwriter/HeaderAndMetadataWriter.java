@@ -1,5 +1,13 @@
 package com.microsoft.fabric.kafka.connect.sink.formatwriter;
 
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import io.confluent.kafka.serializers.NonRecordContainer;
+import org.apache.avro.generic.GenericData;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.jetbrains.annotations.NotNull;
+
 import java.io.IOException;
 import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
@@ -7,16 +15,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.apache.avro.generic.GenericData;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.sink.SinkRecord;
-import org.jetbrains.annotations.NotNull;
-
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
-
-import io.confluent.kafka.serializers.NonRecordContainer;
 
 import static com.microsoft.fabric.kafka.connect.sink.formatwriter.FormatWriterHelper.isSchemaFormat;
 
@@ -37,7 +35,6 @@ public class HeaderAndMetadataWriter {
 
     /**
      * Convert SinkRecord to CSV
-     *
      * @param record SinkRecord
      * @param isKey  boolean
      * @return String
@@ -61,7 +58,7 @@ public class HeaderAndMetadataWriter {
     @NotNull
     @SuppressWarnings(value = "unchecked")
     public Collection<Map<String, Object>> convertSinkRecordToMap(@NotNull SinkRecord record, boolean isKey,
-                                                                  IngestionProperties.DataFormat dataFormat) throws IOException {
+            IngestionProperties.DataFormat dataFormat) throws IOException {
         Object recordValue = isKey ? record.key() : record.value();
         Schema schema = isKey ? record.keySchema() : record.valueSchema();
         String defaultKeyOrValueField = isKey ? KEY_FIELD : VALUE_FIELD;
@@ -100,7 +97,6 @@ public class HeaderAndMetadataWriter {
             throw new ConnectException(errorMessage);
         }
     }
-
 
     public Map<String, String> getKafkaMetaDataAsMap(@NotNull SinkRecord record) {
         Map<String, String> kafkaMetadata = new HashMap<>();

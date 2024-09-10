@@ -1,29 +1,18 @@
 package com.microsoft.fabric.kafka.connect.sink.es;
 
-import com.microsoft.azure.eventhubs.ConnectionStringBuilder;
-import com.microsoft.azure.eventhubs.EventHubClient;
-import com.microsoft.azure.eventhubs.EventHubException;
-
-import java.io.IOException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
+import com.azure.messaging.eventhubs.EventHubClientBuilder;
+import com.azure.messaging.eventhubs.EventHubProducerAsyncClient;
 
 public class EventHubClientProvider {
-
-    private static final ScheduledExecutorService executorService = new ScheduledThreadPoolExecutor(4);
-
-    private final ConnectionStringBuilder connectionStringBuilder;
+    private final String connectionStringBuilder;
 
     public EventHubClientProvider(String connectionString) {
-        this.connectionStringBuilder = new ConnectionStringBuilder(connectionString);
+        this.connectionStringBuilder = connectionString;
     }
 
-    public EventHubClient newInstance() throws EventHubException, IOException {
-        return getEventHubClientFromConnectionString();
+    public EventHubProducerAsyncClient newInstance() {
+        return new EventHubClientBuilder()
+                .connectionString(connectionStringBuilder)
+                .buildAsyncProducerClient();
     }
-
-    protected EventHubClient getEventHubClientFromConnectionString() throws EventHubException, IOException {
-        return EventHubClient.createFromConnectionStringSync(this.connectionStringBuilder.toString(), executorService);
-    }
-
 }

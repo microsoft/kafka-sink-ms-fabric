@@ -11,13 +11,13 @@ class ITCoordinates {
     String table;
 
     ITCoordinates(String accessToken, String database, String table,
-                  String kqlDbConnectionString, String esConnectionString, String eventHub) {
+            String kqlDbConnectionString, String esConnectionString, String eventHub) {
 
         this.accessToken = accessToken;
         this.database = database;
         this.table = table;
-        this.esConnectionString = esConnectionString.replace("sb:/","sb://");
-        this.kqlDbConnectionString = kqlDbConnectionString.replace("Data Source=https:/","Data Source=https://");
+        this.esConnectionString = esConnectionString.replace("sb:/", "sb://");
+        this.kqlDbConnectionString = kqlDbConnectionString.replace("Data Source=https:/", "Data Source=https://");
         this.eventHub = eventHub;
     }
 

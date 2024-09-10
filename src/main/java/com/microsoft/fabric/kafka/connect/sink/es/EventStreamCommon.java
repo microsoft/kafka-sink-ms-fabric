@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class EventStreamCommon {
-    //singleton instance
+    // singleton instance
     private EventStreamCommon() {
     }
 
@@ -24,9 +24,8 @@ public class EventStreamCommon {
                     .map(entry -> entry.split("\\s*:\\s*"))
                     .collect(Collectors.toMap(
                             pair -> pair[0],
-                            pair -> pair[1]
-                    ));
-            return String.format("Endpoint=sb://%s.servicebus.windows.net/ and eventhub %s",
+                            pair -> pair[1]));
+            return String.format("Endpoint=%s and eventhub %s",
                     connectionParts.get("Endpoint"), connectionParts.get("EntityPath"));
         }
         return connectionString;

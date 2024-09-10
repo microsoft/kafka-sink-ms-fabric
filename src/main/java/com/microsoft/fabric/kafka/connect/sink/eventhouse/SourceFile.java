@@ -1,10 +1,10 @@
 package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
+import org.apache.kafka.connect.sink.SinkRecord;
+
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-
-import org.apache.kafka.connect.sink.SinkRecord;
 
 public class SourceFile {
     public String path;

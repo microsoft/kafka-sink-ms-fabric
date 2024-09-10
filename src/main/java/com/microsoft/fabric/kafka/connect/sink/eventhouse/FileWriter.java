@@ -1,14 +1,8 @@
 package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
-import java.io.*;
-import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.zip.GZIPOutputStream;
-
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import com.microsoft.fabric.kafka.connect.sink.format.RecordWriter;
+import com.microsoft.fabric.kafka.connect.sink.format.RecordWriterProvider;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -19,10 +13,12 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
-import com.microsoft.fabric.kafka.connect.sink.format.RecordWriter;
-import com.microsoft.fabric.kafka.connect.sink.format.RecordWriterProvider;
-import com.microsoft.fabric.kafka.connect.sink.formatwriter.KqlDbRecordWriterProvider;
+import java.io.*;
+import java.util.*;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * This class is used to write gzipped rolling files.
@@ -30,8 +26,9 @@ import com.microsoft.fabric.kafka.connect.sink.formatwriter.KqlDbRecordWriterPro
  * so final size can vary.
  */
 public class FileWriter implements Closeable {
-
     private static final Logger log = LoggerFactory.getLogger(FileWriter.class);
+    private static final Set<IngestionProperties.DataFormat> PERMITTED_FORMATS = new HashSet<>(Arrays.asList(IngestionProperties.DataFormat.JSON,
+            IngestionProperties.DataFormat.AVRO, IngestionProperties.DataFormat.MULTIJSON));
     private final long flushInterval;
     private final IngestionProperties.DataFormat format;
     private final Consumer<SourceFile> onRollCallback;
@@ -53,6 +50,7 @@ public class FileWriter implements Closeable {
     private boolean shouldWriteAvroAsBytes = false;
     private boolean stopped = false;
     private boolean isDlqEnabled = false;
+    private static final String BASE_ERROR_MESSAGE = "Failed to write records to KustoDB.";
 
     /**
      * @param basePath        - This is path to which to write the files to.
@@ -62,14 +60,14 @@ public class FileWriter implements Closeable {
      * @param behaviorOnError - Either log, fail or ignore errors based on the mode.
      */
     public FileWriter(String basePath,
-                      long fileThreshold,
-                      Consumer<SourceFile> onRollCallback,
-                      Function<Long, String> getFilePath,
-                      long flushInterval,
-                      ReentrantReadWriteLock reentrantLock,
-                      IngestionProperties.DataFormat format,
-                      EventHouseSinkConfig.BehaviorOnError behaviorOnError,
-                      boolean isDlqEnabled) {
+            long fileThreshold,
+            Consumer<SourceFile> onRollCallback,
+            Function<Long, String> getFilePath,
+            long flushInterval,
+            ReentrantReadWriteLock reentrantLock,
+            IngestionProperties.DataFormat format,
+            EventHouseSinkConfig.BehaviorOnError behaviorOnError,
+            boolean isDlqEnabled) {
         this.getFilePath = getFilePath;
         this.basePath = basePath;
         this.fileThreshold = fileThreshold;
@@ -125,15 +123,15 @@ public class FileWriter implements Closeable {
                 execResult = execResult && file.setExecutable(false, false);
                 if (!execResult) {
                     log.warn("Setting permissions creating file {} returned false." +
-                                    "The files set for ingestion can be read by other applications having access." +
-                                    "Please check security policies on the host that is preventing file permissions from being applied",
+                            "The files set for ingestion can be read by other applications having access." +
+                            "Please check security policies on the host that is preventing file permissions from being applied",
                             filePath);
                 }
             } catch (Exception ex) {
                 // There is a likely chance of the permissions not getting set. This is set to warn
                 log.warn("Exception permissions creating file {} returned false." +
-                                "The files set for ingestion can be read by other applications having access." +
-                                "Please check security policies on the host that is preventing file permissions being applied",
+                        "The files set for ingestion can be read by other applications having access." +
+                        "Please check security policies on the host that is preventing file permissions being applied",
                         filePath, ex);
 
             }
@@ -175,7 +173,7 @@ public class FileWriter implements Closeable {
                  * Swallow the exception and continue to process subsequent records when behavior.on.error is not set to fail mode. Also, throwing/logging the
                  * exception with just a message to avoid polluting logs with duplicate trace.
                  */
-                handleErrors("Failed to write records to KustoDB.", e);
+                handleErrors(e);
             }
             if (delete) {
                 dumpFile();
@@ -188,13 +186,13 @@ public class FileWriter implements Closeable {
         }
     }
 
-    private void handleErrors(String message, Exception e) {
+    private void handleErrors(Exception e) {
         if (EventHouseSinkConfig.BehaviorOnError.FAIL == behaviorOnError) {
-            throw new ConnectException(message, e);
+            throw new ConnectException(BASE_ERROR_MESSAGE, e);
         } else if (EventHouseSinkConfig.BehaviorOnError.LOG == behaviorOnError) {
-            log.error("{}", message, e);
+            log.error(BASE_ERROR_MESSAGE, e);
         } else {
-            log.debug("{}", message, e);
+            log.warn("Encountered error while processing row.Behavior on error is marked as ignore, record will be dropped ", e);
         }
     }
 
@@ -222,10 +220,6 @@ public class FileWriter implements Closeable {
 
     @Override
     public synchronized void close() throws IOException {
-        stop();
-    }
-
-    public synchronized void stop() throws DataException {
         stopped = true;
         if (timer != null) {
             Timer temp = timer;
@@ -300,23 +294,23 @@ public class FileWriter implements Closeable {
     }
 
     public void initializeRecordWriter(@NotNull SinkRecord record) {
-        if (record.value() instanceof Map) {
-            recordWriterProvider = new KqlDbRecordWriterProvider();
-        } else if ((record.valueSchema() != null) && (record.valueSchema().type() == Schema.Type.STRUCT)) {
-            if (format.equals(IngestionProperties.DataFormat.JSON) || format.equals(IngestionProperties.DataFormat.MULTIJSON)) {
-                recordWriterProvider = new KqlDbRecordWriterProvider();
-            } else if (format.equals(IngestionProperties.DataFormat.AVRO)) {
-                recordWriterProvider = new KqlDbRecordWriterProvider();
+        recordWriterProvider = new EventHouseRecordWriterProvider();
+        if (record.value() instanceof Map || ((record.valueSchema() == null)
+                || (record.valueSchema().type() == Schema.Type.STRING))) {
+            if (record.value() != null && record.value() instanceof Map) {
+                log.debug("Record value is of type map");
             } else {
+                log.debug("Record value is of type string");
+            }
+        } else if ((record.valueSchema() != null) && (record.valueSchema().type() == Schema.Type.STRUCT)) {
+            log.debug("Record value is of type struct and format is {}", format);
+            if (!PERMITTED_FORMATS.contains(format)) {
                 throw new ConnectException(String.format("Invalid Kusto table mapping, Kafka records of type "
                         + "Avro and JSON can only be ingested to Kusto table having Avro or JSON mapping. "
                         + "Currently, it is of type %s.", format));
             }
-        } else if ((record.valueSchema() == null) || (record.valueSchema().type() == Schema.Type.STRING)) {
-            recordWriterProvider = new KqlDbRecordWriterProvider();
         } else if ((record.valueSchema() != null) && (record.valueSchema().type() == Schema.Type.BYTES)) {
-            recordWriterProvider = new KqlDbRecordWriterProvider();
-            if (format.equals(IngestionProperties.DataFormat.AVRO)) {
+            if (IngestionProperties.DataFormat.AVRO.equals(format)) {
                 shouldWriteAvroAsBytes = true;
             }
         } else {
@@ -326,7 +320,7 @@ public class FileWriter implements Closeable {
         }
     }
 
-    private class CountingOutputStream extends FilterOutputStream {
+    private static class CountingOutputStream extends FilterOutputStream {
         private final GZIPOutputStream outputStream;
         private long numBytes = 0;
 

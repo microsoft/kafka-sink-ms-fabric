@@ -1,15 +1,16 @@
 package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-
+import com.microsoft.azure.kusto.data.exceptions.KustoDataExceptionBase;
+import com.microsoft.azure.kusto.ingest.IngestClient;
+import com.microsoft.azure.kusto.ingest.IngestionMapping;
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import com.microsoft.azure.kusto.ingest.ManagedStreamingIngestClient;
+import com.microsoft.azure.kusto.ingest.exceptions.IngestionClientException;
+import com.microsoft.azure.kusto.ingest.exceptions.IngestionServiceException;
+import com.microsoft.azure.kusto.ingest.result.IngestionResult;
+import com.microsoft.azure.kusto.ingest.result.IngestionStatus;
+import com.microsoft.azure.kusto.ingest.result.IngestionStatusResult;
+import com.microsoft.azure.kusto.ingest.source.FileSourceInfo;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.producer.Producer;
@@ -24,19 +25,17 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.microsoft.azure.kusto.data.exceptions.KustoDataExceptionBase;
-import com.microsoft.azure.kusto.ingest.IngestClient;
-import com.microsoft.azure.kusto.ingest.IngestionMapping;
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
-import com.microsoft.azure.kusto.ingest.ManagedStreamingIngestClient;
-import com.microsoft.azure.kusto.ingest.exceptions.IngestionClientException;
-import com.microsoft.azure.kusto.ingest.exceptions.IngestionServiceException;
-import com.microsoft.azure.kusto.ingest.result.IngestionResult;
-import com.microsoft.azure.kusto.ingest.result.IngestionStatus;
-import com.microsoft.azure.kusto.ingest.result.IngestionStatusResult;
-import com.microsoft.azure.kusto.ingest.source.FileSourceInfo;
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import static com.microsoft.azure.kusto.ingest.IngestionProperties.DataFormat.*;
+import static com.microsoft.azure.kusto.ingest.IngestionProperties.DataFormat.MULTIJSON;
 import static com.microsoft.fabric.kafka.connect.sink.formatwriter.FormatWriterHelper.isSchemaFormat;
 
 public class TopicPartitionWriter {
@@ -62,7 +61,7 @@ public class TopicPartitionWriter {
     Long lastCommittedOffset;
 
     public TopicPartitionWriter(TopicPartition tp, IngestClient client, TopicIngestionProperties ingestionProps,
-                                @NotNull EventHouseSinkConfig config, boolean isDlqEnabled, String dlqTopicName, Producer<byte[], byte[]> dlqProducer) {
+            @NotNull EventHouseSinkConfig config, boolean isDlqEnabled, String dlqTopicName, Producer<byte[], byte[]> dlqProducer) {
         this.tp = tp;
         this.client = client;
         this.ingestionProps = ingestionProps;
@@ -79,13 +78,13 @@ public class TopicPartitionWriter {
         this.dlqProducer = dlqProducer;
     }
 
-    static String getTempDirectoryName(String tempDirPath) {
+    static @NotNull String getTempDirectoryName(String tempDirPath) {
         String tempDir = String.format("kusto-sink-connector-%s", UUID.randomUUID());
         Path path = Paths.get(tempDirPath, tempDir).toAbsolutePath();
         return path.toString();
     }
 
-    public void handleRollFile(SourceFile fileDescriptor) {
+    public void handleRollFile(@NotNull SourceFile fileDescriptor) {
         FileSourceInfo fileSourceInfo = new FileSourceInfo(fileDescriptor.path, fileDescriptor.rawBytes);
 
         /*
@@ -107,7 +106,7 @@ public class TopicPartitionWriter {
                     }
                 }
                 log.info("Kusto ingestion: file ({}) of size ({}) at current offset ({}) " +
-                                "to target table ({}) in database ({})",
+                        "to target table ({}) in database ({})",
                         fileDescriptor.path, fileDescriptor.rawBytes, currentOffset,
                         ingestionProps.ingestionProperties.getTableName(),
                         ingestionProps.ingestionProperties.getDatabaseName());
@@ -142,8 +141,8 @@ public class TopicPartitionWriter {
                 String details = status.getDetails();
                 UUID ingestionSourceId = status.getIngestionSourceId();
                 log.warn("A batch of streaming records has {} ingestion: table:{}, database:{}, operationId: {}," +
-                                "ingestionSourceId: {}{}{}.\n" +
-                                "Status is final and therefore ingestion won't be retried and data won't reach dlq",
+                        "ingestionSourceId: {}{}{}.\n" +
+                        "Status is final and therefore ingestion won't be retried and data won't reach dlq",
                         status.getStatus(),
                         status.getTable(),
                         status.getDatabase(),
@@ -171,7 +170,7 @@ public class TopicPartitionWriter {
                     log.warn(message);
                     fileDescriptor.records.forEach(this::sendFailedRecordToDlq);
                 }
-                throw new ConnectException(String.format("Retrying ingesting records into KustoDB was interuppted after retryAttempts=%s", retryAttempts + 1),
+                throw new ConnectException(String.format("Retrying ingesting records into KustoDB was interrupted after retryAttempts=%s", retryAttempts + 1),
                         exception);
             }
         } else {
@@ -185,7 +184,7 @@ public class TopicPartitionWriter {
 
     public void sendFailedRecordToDlq(@NotNull SinkRecord record) {
         byte[] recordKey = String.format("Failed to write record to KustoDB with the following kafka coordinates, "
-                        + "topic=%s, partition=%s, offset=%s.",
+                + "topic=%s, partition=%s, offset=%s.",
                 record.topic(),
                 record.kafkaPartition(),
                 record.kafkaOffset()).getBytes(StandardCharsets.UTF_8);
@@ -271,14 +270,16 @@ public class TopicPartitionWriter {
             log.error("Unable to delete temporary connector folder {}", basePath);
         }
     }
+
     void stop() {
         fileWriter.stop();
     }
+
     private @NotNull IngestionProperties updateIngestionPropertiesWithTargetFormat() {
         IngestionProperties updatedIngestionProperties = new IngestionProperties(this.ingestionProps.ingestionProperties);
         IngestionProperties.DataFormat sourceFormat = ingestionProps.ingestionProperties.getDataFormat();
         if (isSchemaFormat(sourceFormat)) {
-            log.info("Incoming dataformat {}, setting target format to MULTIJSON", sourceFormat);
+            log.info("Incoming dataformat {}, setting target format to {}", sourceFormat, MULTIJSON.name());
             updatedIngestionProperties.setDataFormat(MULTIJSON);
         } else {
             updatedIngestionProperties.setDataFormat(ingestionProps.ingestionProperties.getDataFormat());
