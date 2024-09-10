@@ -1,8 +1,8 @@
 package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.config.ConfigException;
+
+import java.util.Objects;
 
 public class TopicToTableMapping {
     private String mapping;

@@ -23,10 +23,10 @@ public class EventStreamSinkConfig extends AbstractConfig {
     static final String ES_CLIENTS_PER_TASK_DOC = "Number of Event stream clients to use per task";
     static final String ES_CLIENTS_PER_TASK_DISPLAY = "Clients per task";
     public static final ConfigDef CONFIG_DEF = new ConfigDef().define(
-                    ES_CONNECTION_STRING,
-                    ConfigDef.Type.PASSWORD,
-                    ConfigDef.Importance.HIGH,
-                    ES_CONNECTION_STRING_DISPLAY)
+            ES_CONNECTION_STRING,
+            ConfigDef.Type.PASSWORD,
+            ConfigDef.Importance.HIGH,
+            ES_CONNECTION_STRING_DISPLAY)
             .define(
                     ES_MESSAGE_FORMAT,
                     ConfigDef.Type.STRING,

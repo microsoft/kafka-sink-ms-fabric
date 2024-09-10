@@ -1,12 +1,8 @@
 package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.TimeUnit;
-
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -15,13 +11,13 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 public class EventHouseSinkConfig extends AbstractConfig {
     private static final String DLQ_PROPS_PREFIX = "misc.deadletterqueue.";
@@ -80,10 +76,6 @@ public class EventHouseSinkConfig extends AbstractConfig {
             + "to which the Connector should write records failed due to restrictions while writing to the file in `tempdir.path`, network interruptions or unavailability of Kusto cluster.";
     private static final String KUSTO_SINK_MAX_RETRY_TIME_MS_DOC = "Maximum time up to which the Connector "
             + "should retry writing records to Kusto table in case of failures.";
-
-    private static final Logger log = LoggerFactory.getLogger(EventHouseSinkConfig.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper().enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
-
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(
                     KQL_DB_CONNECTION_STRING,
@@ -189,6 +181,8 @@ public class EventHouseSinkConfig extends AbstractConfig {
                     ConfigDef.Range.atLeast(100),
                     Importance.HIGH,
                     KUSTO_SINK_FLUSH_INTERVAL_MS_DOC);
+    private static final Logger log = LoggerFactory.getLogger(EventHouseSinkConfig.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper().enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
 
     public EventHouseSinkConfig(Map<String, String> parsedConfig) {
         super(CONFIG_DEF, parsedConfig);
@@ -202,7 +196,7 @@ public class EventHouseSinkConfig extends AbstractConfig {
         return KustoAuthenticationStrategy.valueOf(getString(KUSTO_AUTH_STRATEGY_CONF).toUpperCase(Locale.ENGLISH));
     }
 
-    public String getConnectionString(){
+    public String getConnectionString() {
         return this.getPassword(KQL_DB_CONNECTION_STRING).value();
     }
 
@@ -269,8 +263,8 @@ public class EventHouseSinkConfig extends AbstractConfig {
         Properties props = new Properties();
         props.putAll(dlqConfigs);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, getDlqBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         return props;
     }
 
@@ -292,6 +286,7 @@ public class EventHouseSinkConfig extends AbstractConfig {
 
         /**
          * Gets names of available behavior on error mode.
+         *
          * @return array of available behavior on error mode names
          */
         public static String @NotNull [] getNames() {

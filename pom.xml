@@ -19,7 +19,7 @@
         <commonio.version>2.16.1</commonio.version>
         <dependency-check-maven.version>10.0.2</dependency-check-maven.version>
         <eventhubs.version>5.18.7</eventhubs.version>
-        <formatter.version>2.20.0</formatter.version>
+        <formatter.version>2.16.0</formatter.version>
         <impsort.version>1.6.2</impsort.version>
         <java.release.version>1.8</java.release.version>
         <jsonassert.version>1.5.1</jsonassert.version>

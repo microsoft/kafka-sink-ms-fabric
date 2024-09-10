@@ -217,7 +217,7 @@ public class EventHouseSinkTaskTest {
         final Logger logger = Logger.getRootLogger();
         logger.addAppender(appender);
         try {
-            Logger.getLogger(EventHouseSinkTask.class).error("Error closing kusto client");
+            Logger.getLogger(EventHouseSinkTaskTest.class).error("Error closing kusto client");
         } finally {
             logger.removeAppender(appender);
             logger.removeAllAppenders();
@@ -245,7 +245,7 @@ public class EventHouseSinkTaskTest {
         final Logger logger = Logger.getRootLogger();
         logger.addAppender(appender);
         try {
-            Logger.getLogger(EventHouseSinkTask.class).error("Error closing kusto client");
+            Logger.getLogger(EventHouseSinkTaskTest.class).error("Error closing kusto client");
         } finally {
             logger.removeAppender(appender);
             logger.removeAllAppenders();

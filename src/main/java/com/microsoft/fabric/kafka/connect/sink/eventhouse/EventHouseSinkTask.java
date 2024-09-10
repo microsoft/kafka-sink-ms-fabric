@@ -1,9 +1,13 @@
 package com.microsoft.fabric.kafka.connect.sink.eventhouse;
 
-import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.CountDownLatch;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.microsoft.azure.kusto.data.HttpClientProperties;
+import com.microsoft.azure.kusto.data.auth.ConnectionStringBuilder;
+import com.microsoft.azure.kusto.ingest.IngestClient;
+import com.microsoft.azure.kusto.ingest.IngestClientFactory;
+import com.microsoft.azure.kusto.ingest.IngestionMapping;
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import com.microsoft.fabric.kafka.connect.sink.Version;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.http.HttpHost;
@@ -20,14 +24,9 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.microsoft.azure.kusto.data.*;
-import com.microsoft.azure.kusto.data.auth.ConnectionStringBuilder;
-import com.microsoft.azure.kusto.ingest.IngestClient;
-import com.microsoft.azure.kusto.ingest.IngestClientFactory;
-import com.microsoft.azure.kusto.ingest.IngestionMapping;
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
-import com.microsoft.fabric.kafka.connect.sink.Version;
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Kusto sink uses file system to buffer records.
@@ -74,7 +73,6 @@ public class EventHouseSinkTask extends SinkTask {
         return kcsb;
     }
 
-
     public static Map<String, TopicIngestionProperties> getTopicsToIngestionProps(EventHouseSinkConfig config) {
         Map<String, TopicIngestionProperties> result = new HashMap<>();
 
@@ -89,8 +87,8 @@ public class EventHouseSinkTask extends SinkTask {
                 }
                 String mappingRef = mapping.getMapping();
                 if (StringUtils.isNotEmpty(mappingRef) && StringUtils.isNotEmpty(format)) {
-                        props.setIngestionMapping(mappingRef,
-                                IngestionMapping.IngestionMappingKind.valueOf(format.toUpperCase(Locale.ROOT)));
+                    props.setIngestionMapping(mappingRef,
+                            IngestionMapping.IngestionMappingKind.valueOf(format.toUpperCase(Locale.ROOT)));
                 }
                 TopicIngestionProperties topicIngestionProperties = new TopicIngestionProperties();
                 topicIngestionProperties.ingestionProperties = props;
@@ -118,7 +116,7 @@ public class EventHouseSinkTask extends SinkTask {
                 ConnectionStringBuilder streamingConnectionStringBuilder = createKustoEngineConnectionString(config);
                 streamingIngestClient = httpClientProperties != null
                         ? IngestClientFactory.createManagedStreamingIngestClient(ingestConnectionStringBuilder, streamingConnectionStringBuilder,
-                        httpClientProperties)
+                                httpClientProperties)
                         : IngestClientFactory.createManagedStreamingIngestClient(ingestConnectionStringBuilder, streamingConnectionStringBuilder);
             }
         } catch (Exception e) {

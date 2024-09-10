@@ -1,11 +1,13 @@
 package com.microsoft.fabric.kafka.connect.sink.formatwriter;
 
-import java.io.IOException;
-import java.net.ConnectException;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.stream.Collectors;
-
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import io.confluent.kafka.serializers.NonRecordContainer;
 import org.apache.avro.file.DataFileReader;
 import org.apache.avro.file.SeekableByteArrayInput;
 import org.apache.avro.generic.GenericData;
@@ -19,25 +21,19 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
-
-import io.confluent.kafka.serializers.NonRecordContainer;
+import java.io.IOException;
+import java.net.ConnectException;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.microsoft.azure.kusto.ingest.IngestionProperties.DataFormat.*;
 
 public class FormatWriterHelper {
-    private static final Logger LOGGER = LoggerFactory.getLogger(KqlDbRecordWriter.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(FormatWriterHelper.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private static final JsonFactory JSON_FACTORY = new JsonFactory();
-    private static final TypeReference<Map<String, Object>> MAP_TYPE_REFERENCE
-            = new TypeReference<Map<String, Object>>() {
-    };
+    private static final TypeReference<Map<String, Object>> MAP_TYPE_REFERENCE = new TypeReference<Map<String, Object>>() {};
 
     private FormatWriterHelper() {
     }
@@ -78,8 +74,8 @@ public class FormatWriterHelper {
      * @return a Map of the K-V of JSON
      */
     public static @NotNull Collection<Map<String, Object>> convertBytesToMap(byte[] messageBytes,
-                                                                             String defaultKeyOrValueField,
-                                                                             IngestionProperties.DataFormat dataformat) throws IOException {
+            String defaultKeyOrValueField,
+            IngestionProperties.DataFormat dataformat) throws IOException {
         if (messageBytes == null || messageBytes.length == 0) {
             return Collections.emptyList();
         }
@@ -88,9 +84,8 @@ public class FormatWriterHelper {
         }
         String bytesAsJson = new String(messageBytes, StandardCharsets.UTF_8);
         if (isJson(dataformat)) {
-            return isValidJson(defaultKeyOrValueField, bytesAsJson) ?
-                    parseJson(bytesAsJson) :
-                    Collections.singletonList(Collections.singletonMap(defaultKeyOrValueField,
+            return isValidJson(defaultKeyOrValueField, bytesAsJson) ? parseJson(bytesAsJson)
+                    : Collections.singletonList(Collections.singletonMap(defaultKeyOrValueField,
                             OBJECT_MAPPER.readTree(messageBytes)));
         } else {
             return Collections.singletonList(Collections.singletonMap(defaultKeyOrValueField,
@@ -100,9 +95,9 @@ public class FormatWriterHelper {
 
     private static @NotNull Collection<Map<String, Object>> parseJson(String json) throws IOException {
         JsonNode jsonData = OBJECT_MAPPER.readTree(json);
-        if(jsonData.isArray()){
+        if (jsonData.isArray()) {
             List<Map<String, Object>> result = new ArrayList<>();
-            for(JsonNode node : jsonData){
+            for (JsonNode node : jsonData) {
                 result.add(OBJECT_MAPPER.convertValue(node, MAP_TYPE_REFERENCE));
             }
             return result;
@@ -139,10 +134,9 @@ public class FormatWriterHelper {
         return true;
     }
 
-
     public static @NotNull Map<String, Object> convertStringToMap(Object value,
-                                                                  String defaultKeyOrValueField,
-                                                                  IngestionProperties.DataFormat dataFormat) throws IOException {
+            String defaultKeyOrValueField,
+            IngestionProperties.DataFormat dataFormat) throws IOException {
         String objStr = (String) value;
         if (isJson(dataFormat) && isValidJson(defaultKeyOrValueField, objStr)) {
             return OBJECT_MAPPER.readerFor(MAP_TYPE_REFERENCE).readValue(objStr);
@@ -173,7 +167,7 @@ public class FormatWriterHelper {
             List<Map<String, Object>> nodes = new ArrayList<>();
             while (dataFileReader.hasNext()) {
                 String jsonString = dataFileReader.next().toString();
-                LOGGER.trace("Encoding AVROBytes yielded {}",jsonString);
+                LOGGER.trace("Encoding AVROBytes yielded {}", jsonString);
                 try {
                     Map<String, Object> nodeMap = OBJECT_MAPPER.readValue(jsonString, MAP_TYPE_REFERENCE);
                     returnValue.putAll(nodeMap);

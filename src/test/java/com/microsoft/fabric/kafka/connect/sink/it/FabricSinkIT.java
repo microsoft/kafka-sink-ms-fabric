@@ -87,8 +87,7 @@ class FabricSinkIT {
             .withKafka(kafkaContainer)
             .dependsOn(kafkaContainer, proxyContainer, schemaRegistryContainer);
     private static final String keyColumn = "vlong";
-    private static final String COMPLEX_AVRO_BYTES_TABLE_TEST =
-            String.format("ComplexAvroBytesTest_%s",UUID.randomUUID()).replace('-', '_');
+    private static final String COMPLEX_AVRO_BYTES_TABLE_TEST = String.format("ComplexAvroBytesTest_%s", UUID.randomUUID()).replace('-', '_');
     private static final String TBL_KEYWORD = "TBL";
     private static final String CABT_KEYWORD = "CABT";
     private static ITCoordinates coordinates;
@@ -104,8 +103,7 @@ class FabricSinkIT {
         if (coordinates.isValidConfig()) {
             ConnectionStringBuilder engineCsb = ConnectionStringBuilder.createWithAadAccessTokenAuthentication(engineUrl,
                     coordinates.accessToken);
-            ConnectionStringBuilder dmCsb = ConnectionStringBuilder.
-                    createWithAadAccessTokenAuthentication(ingestCluster, coordinates.accessToken);
+            ConnectionStringBuilder dmCsb = ConnectionStringBuilder.createWithAadAccessTokenAuthentication(ingestCluster, coordinates.accessToken);
             engineClient = ClientFactory.createClient(engineCsb);
             dmClient = ClientFactory.createClient(dmCsb);
             LOGGER.info("Creating tables in Kusto");
@@ -133,7 +131,7 @@ class FabricSinkIT {
         assert kqlResource != null;
         List<String> kqlsToExecute = Files.readAllLines(Paths.get(kqlResource.toURI())).stream()
                 .map(kql -> kql.replace(TBL_KEYWORD, coordinates.table))
-                .map(kql -> kql.replace(CABT_KEYWORD,COMPLEX_AVRO_BYTES_TABLE_TEST))
+                .map(kql -> kql.replace(CABT_KEYWORD, COMPLEX_AVRO_BYTES_TABLE_TEST))
                 .collect(Collectors.toList());
         kqlsToExecute.forEach(kql -> {
             try {
@@ -142,7 +140,7 @@ class FabricSinkIT {
                 LOGGER.error("Failed to execute kql: {}", kql, e);
             }
         });
-        LOGGER.info("Created tables {} , {} and associated mappings", coordinates.table , COMPLEX_AVRO_BYTES_TABLE_TEST);
+        LOGGER.info("Created tables {} , {} and associated mappings", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
     }
 
     private static void refreshDm() throws Exception {
@@ -175,19 +173,19 @@ class FabricSinkIT {
     }
 
     private static void deployKqlDbConnector(@NotNull String dataFormat, String topicTableMapping,
-                                             String srUrl, String keyFormat, String valueFormat) {
+            String srUrl, String keyFormat, String valueFormat) {
         deployKqlDbConnector(dataFormat, coordinates.kqlDbConnectionString, topicTableMapping, srUrl, keyFormat, valueFormat, Collections.emptyMap());
         // Only test EventStream case for AVRO and JSON
-        if(dataFormat.equals("avro") || dataFormat.equals("json")) {
-            deployEventStreamConnector(dataFormat, coordinates.esConnectionString,srUrl, keyFormat, valueFormat, Collections.emptyMap());
+        if (dataFormat.equals("avro") || dataFormat.equals("json")) {
+            deployEventStreamConnector(dataFormat, coordinates.esConnectionString, srUrl, keyFormat, valueFormat, Collections.emptyMap());
         }
     }
 
     private static void deployEventStreamConnector(@NotNull String dataFormat, String connectionString,
-                                             String srUrl, String keyFormat, String valueFormat,
-                                             Map<String, Object> overrideProps) {
+            String srUrl, String keyFormat, String valueFormat,
+            Map<String, Object> overrideProps) {
         Map<String, Object> connectorProps = new HashMap<>();
-        LOGGER.info("Using EventStream co-ordinates {} ",connectionString.split(";")[0]);
+        LOGGER.info("Using EventStream co-ordinates {} ", connectionString.split(";")[0]);
         connectorProps.put("connector.class", "com.microsoft.fabric.kafka.connect.sink.FabricSinkConnector");
         connectorProps.put("connection.string", connectionString);
         connectorProps.put("eventhub.name", coordinates.eventHub);
@@ -210,10 +208,9 @@ class FabricSinkIT {
                 connectContainer.getConnectorTaskState(String.format(ES_CONNECTOR, dataFormat), 0));
     }
 
-
     private static void deployKqlDbConnector(@NotNull String dataFormat, String connectionString, String topicTableMapping,
-                                             String srUrl, String keyFormat, String valueFormat,
-                                             Map<String, Object> overrideProps) {
+            String srUrl, String keyFormat, String valueFormat,
+            Map<String, Object> overrideProps) {
         Map<String, Object> connectorProps = new HashMap<>();
         connectorProps.put("connector.class", "com.microsoft.fabric.kafka.connect.sink.FabricSinkConnector");
         connectorProps.put("flush.size.bytes", 10000);
@@ -255,15 +252,15 @@ class FabricSinkIT {
         }
         String topicTableMapping = dataFormat.equals("csv")
                 ? String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'csv_mapping','streaming':'true'}]",
-                dataFormat, coordinates.database, coordinates.table, dataFormat)
+                        dataFormat, coordinates.database, coordinates.table, dataFormat)
                 : String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'data_mapping'}]", dataFormat,
-                coordinates.database,
-                coordinates.table, dataFormat);
+                        coordinates.database,
+                        coordinates.table, dataFormat);
         if (dataFormat.startsWith("bytes")) {
             valueFormat = "org.apache.kafka.connect.converters.ByteArrayConverter";
             // JSON is written as JSON
             topicTableMapping = String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s'," +
-                            "'mapping':'data_mapping'}]", dataFormat,
+                    "'mapping':'data_mapping'}]", dataFormat,
                     coordinates.database,
                     coordinates.table, dataFormat.split("-")[1]);
         }
@@ -302,8 +299,7 @@ class FabricSinkIT {
                     for (int i = 0; i < maxRecords; i++) {
                         GenericData.Record record = (GenericData.Record) randomDataBuilder.generate();
                         record.put("vtype", dataFormat);
-                        ProducerRecord<String, GenericData.Record> producerRecord =
-                                new ProducerRecord<>("e2e.avro.topic", "Key-" + i, record);
+                        ProducerRecord<String, GenericData.Record> producerRecord = new ProducerRecord<>("e2e.avro.topic", "Key-" + i, record);
                         Map<String, Object> jsonRecordMap = record.getSchema().getFields().stream()
                                 .collect(Collectors.toMap(Schema.Field::name, field -> record.get(field.name())));
                         jsonRecordMap.put("vtype", dataFormat);
@@ -372,11 +368,10 @@ class FabricSinkIT {
                         byte[] dataToSend = record.toString().getBytes(StandardCharsets.UTF_8);
                         Map<String, Object> jsonRecordMap = record.getSchema().getFields().stream()
                                 .collect(Collectors.toMap(Schema.Field::name, field -> record.get(field.name())));
-                        ProducerRecord<String, byte[]> producerRecord =
-                                new ProducerRecord<>(
-                                        String.format(E2E_TOPIC, dataFormat),
-                                        String.format("Key-%s", i),
-                                        dataToSend);
+                        ProducerRecord<String, byte[]> producerRecord = new ProducerRecord<>(
+                                String.format(E2E_TOPIC, dataFormat),
+                                String.format("Key-%s", i),
+                                dataToSend);
                         jsonRecordMap.put("vtype", dataFormat);
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(keyColumn).toString()),
                                 objectMapper.writeValueAsString(jsonRecordMap));
@@ -404,9 +399,9 @@ class FabricSinkIT {
                         new CustomComparator(LENIENT,
                                 // there are sometimes round off errors in the double values but they are close enough to 8 precision
                                 new Customization("vdec", (vdec1,
-                                                           vdec2) -> Math.abs(Double.parseDouble(vdec1.toString()) - Double.parseDouble(vdec2.toString())) < 0.000000001),
+                                        vdec2) -> Math.abs(Double.parseDouble(vdec1.toString()) - Double.parseDouble(vdec2.toString())) < 0.000000001),
                                 new Customization("vreal", (vreal1,
-                                                            vreal2) -> Math.abs(Double.parseDouble(vreal1.toString()) - Double.parseDouble(vreal2.toString())) < 0.0001)));
+                                        vreal2) -> Math.abs(Double.parseDouble(vreal1.toString()) - Double.parseDouble(vreal2.toString())) < 0.0001)));
             } catch (JSONException e) {
                 fail(e);
             }
@@ -432,10 +427,10 @@ class FabricSinkIT {
         producerProperties.put("message.max.bytes", KAFKA_MAX_MSG_SIZE);
         String topicName = String.format(E2E_TOPIC, dataFormat);
         String topicTableMapping = String.format("[{'topic': '%s','db': '%s', " +
-                        "'table': '%s','format':'%s','mapping':'%s_mapping'}]", topicName,
+                "'table': '%s','format':'%s','mapping':'%s_mapping'}]", topicName,
                 coordinates.database,
                 COMPLEX_AVRO_BYTES_TABLE_TEST, dataFormat.split("-")[1], COMPLEX_AVRO_BYTES_TABLE_TEST);
-        deployKqlDbConnector(dataFormat, coordinates.kqlDbConnectionString,topicTableMapping, srUrl,
+        deployKqlDbConnector(dataFormat, coordinates.kqlDbConnectionString, topicTableMapping, srUrl,
                 AvroConverter.class.getName(),
                 "org.apache.kafka.connect.converters.ByteArrayConverter",
                 Collections.singletonMap("key.converter.schema.registry.url", srUrl));
@@ -447,22 +442,21 @@ class FabricSinkIT {
                 .endRecord();
         long keyStart = 100000L;
 
-        InputStream expectedResultsStream = Objects.requireNonNull(this.getClass().getClassLoader().
-                getResourceAsStream("avro-complex-data/expected-results.txt"));
+        InputStream expectedResultsStream = Objects
+                .requireNonNull(this.getClass().getClassLoader().getResourceAsStream("avro-complex-data/expected-results.txt"));
         String expectedResults = IOUtils.toString(expectedResultsStream, StandardCharsets.UTF_8);
-        Map<String, String> expectedResultMap =
-                Arrays.stream(expectedResults.split("\n"))
-                        .map(line -> line.split("~"))
-                        .collect(Collectors.toMap(arr -> arr[0], arr -> arr[1]));
+        Map<String, String> expectedResultMap = Arrays.stream(expectedResults.split("\n"))
+                .map(line -> line.split("~"))
+                .collect(Collectors.toMap(arr -> arr[0], arr -> arr[1]));
         try (KafkaProducer<GenericData.Record, byte[]> producer = new KafkaProducer<>(producerProperties)) {
             for (int i = 1; i <= maxRecords; i++) {
-                //complex-avro-1.avro
+                // complex-avro-1.avro
                 long keyTick = keyStart + i;
                 GenericData.Record keyRecord = new GenericData.Record(keySchema);
                 keyRecord.put("IterationKey", String.valueOf(i));
                 keyRecord.put("Timestamp", keyTick);
-                InputStream avroData = Objects.requireNonNull(this.getClass().getClassLoader().
-                        getResourceAsStream(String.format("avro-complex-data/complex-avro-%d.avro", i)));
+                InputStream avroData = Objects
+                        .requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-complex-data/complex-avro-%d.avro", i)));
                 byte[] testData = IOUtils.toByteArray(avroData);
                 ProducerRecord<GenericData.Record, byte[]> producerRecord = new ProducerRecord<>(topicName, keyRecord, testData);
                 producerRecord.headers().add("vtype", dataFormat.getBytes());
@@ -477,7 +471,7 @@ class FabricSinkIT {
         }
 
         String countLongQuery = String.format("%s | summarize c = count() by event_id | project %s=event_id, " +
-                        "vresult = bag_pack('event_id',event_id,'count',c)", COMPLEX_AVRO_BYTES_TABLE_TEST, keyColumn);
+                "vresult = bag_pack('event_id',event_id,'count',c)", COMPLEX_AVRO_BYTES_TABLE_TEST, keyColumn);
 
         Map<Object, String> actualRecordsIngested = getRecordsIngested(countLongQuery, maxRecords);
         assertEquals(expectedResultMap, actualRecordsIngested);
@@ -489,7 +483,7 @@ class FabricSinkIT {
      * @param maxRecords The maximum number of records to poll for
      * @return A map of the records ingested
      */
-    private @NotNull Map<Object, String> getRecordsIngested(String query , int maxRecords) {
+    private @NotNull Map<Object, String> getRecordsIngested(String query, int maxRecords) {
         Predicate<Object> predicate = (results) -> {
             if (results != null) {
                 LOGGER.info("Retrieved records count {}", ((Map<?, ?>) results).size());
