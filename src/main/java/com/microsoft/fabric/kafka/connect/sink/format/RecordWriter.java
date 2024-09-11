@@ -1,10 +1,11 @@
 package com.microsoft.fabric.kafka.connect.sink.format;
 
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
-import org.apache.kafka.connect.sink.SinkRecord;
-
 import java.io.Closeable;
 import java.io.IOException;
+
+import org.apache.kafka.connect.sink.SinkRecord;
+
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
 
 public interface RecordWriter extends Closeable {
     /**
@@ -12,7 +13,7 @@ public interface RecordWriter extends Closeable {
      *
      * @param record the record to persist.
      */
-    void write(SinkRecord record, IngestionProperties.DataFormat dataFormat) throws IOException;
+    String write(SinkRecord record, IngestionProperties.DataFormat dataFormat) throws IOException;
 
     /**
      * Close this writer.
