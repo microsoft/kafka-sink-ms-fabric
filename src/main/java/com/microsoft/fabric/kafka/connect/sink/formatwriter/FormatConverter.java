@@ -1,13 +1,5 @@
 package com.microsoft.fabric.kafka.connect.sink.formatwriter;
 
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
-import io.confluent.kafka.serializers.NonRecordContainer;
-import org.apache.avro.generic.GenericData;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.sink.SinkRecord;
-import org.jetbrains.annotations.NotNull;
-
 import java.io.IOException;
 import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
@@ -16,18 +8,31 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.jetbrains.annotations.NotNull;
+
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
+
+import io.confluent.kafka.serializers.NonRecordContainer;
+
 import static com.microsoft.fabric.kafka.connect.sink.formatwriter.FormatWriterHelper.isSchemaFormat;
 
-public class HeaderAndMetadataWriter {
-    public String KEY_FIELD = "key";
-    public String VALUE_FIELD = "value";
+public class FormatConverter {
+    public static final String KEY_FIELD = "key";
+    public static final String KEYS_FIELD = "keys";
+    public static final String HEADERS_FIELD = "headers";
+    public static final String VALUE_FIELD = "value";
 
-    public String TOPIC = "topic";
-    public String PARTITION = "partition";
-    public String OFFSET = "offset";
+    public static final String KAFKA_METADATA_FIELD = "kafkamd";
+    public static String TOPIC = "topic";
+    public static String PARTITION = "partition";
+    public static String OFFSET = "offset";
 
     @NotNull
-    public Map<String, Object> getHeadersAsMap(@NotNull SinkRecord record) {
+    public static Map<String, Object> getHeadersAsMap(@NotNull SinkRecord record) {
         Map<String, Object> headers = new HashMap<>();
         record.headers().forEach(header -> headers.put(header.key(), header.value()));
         return headers;
@@ -39,7 +44,7 @@ public class HeaderAndMetadataWriter {
      * @param isKey  boolean
      * @return String
      */
-    public String convertSinkRecordToCsv(@NotNull SinkRecord record, boolean isKey) {
+    public static String convertSinkRecordToCsv(@NotNull SinkRecord record, boolean isKey) {
         if (isKey) {
             if (record.key() instanceof byte[]) {
                 return record.key() == null ? "" : new String((byte[]) record.key(), StandardCharsets.UTF_8);
@@ -57,7 +62,7 @@ public class HeaderAndMetadataWriter {
 
     @NotNull
     @SuppressWarnings(value = "unchecked")
-    public Collection<Map<String, Object>> convertSinkRecordToMap(@NotNull SinkRecord record, boolean isKey,
+    public static Collection<Map<String, Object>> convertSinkRecordToMap(@NotNull SinkRecord record, boolean isKey,
             IngestionProperties.DataFormat dataFormat) throws IOException {
         Object recordValue = isKey ? record.key() : record.value();
         Schema schema = isKey ? record.keySchema() : record.valueSchema();
@@ -98,7 +103,7 @@ public class HeaderAndMetadataWriter {
         }
     }
 
-    public Map<String, String> getKafkaMetaDataAsMap(@NotNull SinkRecord record) {
+    public static @NotNull Map<String, String> getKafkaMetaDataAsMap(@NotNull SinkRecord record) {
         Map<String, String> kafkaMetadata = new HashMap<>();
         kafkaMetadata.put(TOPIC, record.topic());
         kafkaMetadata.put(PARTITION, String.valueOf(record.kafkaPartition()));

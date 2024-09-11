@@ -1,6 +1,8 @@
 package com.microsoft.fabric.kafka.connect.sink.es;
 
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import java.util.Locale;
+import java.util.Map;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -8,8 +10,7 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Locale;
-import java.util.Map;
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
 
 public class EventStreamSinkConfig extends AbstractConfig {
     static final String ES_CONNECTION_STRING = "connection.string";
