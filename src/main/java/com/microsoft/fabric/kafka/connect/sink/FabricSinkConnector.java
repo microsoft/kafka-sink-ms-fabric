@@ -1,10 +1,8 @@
 package com.microsoft.fabric.kafka.connect.sink;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
+import com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkConfig;
+import com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkTask;
+import com.microsoft.fabric.kafka.connect.sink.eventhouse.internal.Version;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -14,8 +12,10 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkConfig;
-import com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkTask;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class FabricSinkConnector extends SinkConnector {
     private static final Logger LOGGER = LoggerFactory.getLogger(FabricSinkConnector.class);

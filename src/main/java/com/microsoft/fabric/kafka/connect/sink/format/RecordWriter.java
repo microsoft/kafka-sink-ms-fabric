@@ -1,11 +1,10 @@
 package com.microsoft.fabric.kafka.connect.sink.format;
 
-import java.io.Closeable;
-import java.io.IOException;
-
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import org.apache.kafka.connect.sink.SinkRecord;
 
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import java.io.Closeable;
+import java.io.IOException;
 
 public interface RecordWriter extends Closeable {
     /**

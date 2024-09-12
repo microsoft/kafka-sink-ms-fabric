@@ -1,8 +1,6 @@
 package com.microsoft.fabric.kafka.connect.sink.es;
 
-import java.util.Locale;
-import java.util.Map;
-
+import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -10,7 +8,8 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import java.util.Locale;
+import java.util.Map;
 
 public class EventStreamSinkConfig extends AbstractConfig {
     static final String ES_CONNECTION_STRING = "connection.string";
@@ -24,10 +23,10 @@ public class EventStreamSinkConfig extends AbstractConfig {
     static final String ES_CLIENTS_PER_TASK_DOC = "Number of Event stream clients to use per task";
     static final String ES_CLIENTS_PER_TASK_DISPLAY = "Clients per task";
     public static final ConfigDef CONFIG_DEF = new ConfigDef().define(
-            ES_CONNECTION_STRING,
-            ConfigDef.Type.PASSWORD,
-            ConfigDef.Importance.HIGH,
-            ES_CONNECTION_STRING_DISPLAY)
+                    ES_CONNECTION_STRING,
+                    ConfigDef.Type.PASSWORD,
+                    ConfigDef.Importance.HIGH,
+                    ES_CONNECTION_STRING_DISPLAY)
             .define(
                     ES_MESSAGE_FORMAT,
                     ConfigDef.Type.STRING,

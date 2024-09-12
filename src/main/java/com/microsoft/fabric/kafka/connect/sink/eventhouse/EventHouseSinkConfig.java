@@ -21,6 +21,7 @@ public class EventHouseSinkConfig extends AbstractConfig {
 
     private static final String EVENTHOUSE_CONNECTION_STRING = "connection.string";
     private static final String EVENTHOUSE_AUTH_STRATEGY_CONF = "aad.auth.strategy";
+    private static final String EVENTHOUSE_AUTH_ACCESS_TOKEN_CONF = "aad.auth.accesstoken";
     private static final String EVENTHOUSE_TABLES_MAPPING_CONF = "eh.tables.topics.mapping";
     private static final String EVENTHOUSE_SINK_FLUSH_SIZE_BYTES_CONF = "eh.flush.size.bytes";
     private static final String EVENTHOUSE_SINK_FLUSH_INTERVAL_MS_CONF = "eh.flush.interval.ms";
@@ -31,10 +32,13 @@ public class EventHouseSinkConfig extends AbstractConfig {
     private static final String EVENTHOUSE_CONNECTION_PROXY_PORT = "proxy.port";
     private static final String EVENTHOUSE_SINK_MAX_RETRY_TIME_MS_CONF = "errors.retry.max.time.ms";
     private static final String EVENTHOUSE_SINK_RETRY_BACKOFF_TIME_MS_CONF = "errors.retry.backoff.time.ms";
+    private static final String EVENTHOUSE_SINK_MAX_RETRY_ATTEMPTS = "errors.max.retries";
     private static final String DLQ_PROPS_PREFIX = "misc.deadletterqueue.";
     private static final String EVENTHOUSE_USE_MANAGED_IDENTITY = "eh.managed.identity";
     private static final String EVENTHOUSE_MANAGED_IDENTITY_ID = "eh.managed.identity.id";
     private static final String EVENTHOUSE_USE_WORKLOAD_IDENTITY = "eh.workload.identity";
+    private static final String INGEST_PREFIX = "ingest-";
+    private static final String PROTOCOL_SUFFIX = "://";
 
     public EventHouseSinkConfig(ConfigDef config, Map<String, String> parsedConfig) {
         super(config, parsedConfig);
@@ -103,6 +107,16 @@ public class EventHouseSinkConfig extends AbstractConfig {
                         errorAndRetriesGroupOrder++,
                         ConfigDef.Width.MEDIUM,
                         "Miscellaneous Dead-Letter Queue Topic Name")
+                .define(
+                        EVENTHOUSE_SINK_MAX_RETRY_ATTEMPTS,
+                        ConfigDef.Type.SHORT,
+                        3,
+                        ConfigDef.Importance.LOW,
+                        "Maximum retries and backoff attempts.",
+                        errorAndRetriesGroupName,
+                        errorAndRetriesGroupOrder++,
+                        ConfigDef.Width.MEDIUM,
+                        "Retry attempts")
                 .define(
                         EVENTHOUSE_SINK_MAX_RETRY_TIME_MS_CONF,
                         ConfigDef.Type.LONG,
@@ -186,22 +200,32 @@ public class EventHouseSinkConfig extends AbstractConfig {
                 .define(
                         EVENTHOUSE_AUTH_STRATEGY_CONF,
                         ConfigDef.Type.STRING,
-                        KustoAuthenticationStrategy.APPLICATION.name(),
+                        AuthenticationStrategy.APPLICATION.name(),
                         ConfigDef.ValidString.in(
-                                KustoAuthenticationStrategy.APPLICATION.name(),
-                                KustoAuthenticationStrategy.APPLICATION.name().toLowerCase(Locale.ENGLISH),
-                                KustoAuthenticationStrategy.MANAGED_IDENTITY.name(),
-                                KustoAuthenticationStrategy.MANAGED_IDENTITY.name().toLowerCase(Locale.ENGLISH),
-                                KustoAuthenticationStrategy.AZ_DEV_TOKEN.name(),
-                                KustoAuthenticationStrategy.AZ_DEV_TOKEN.name().toLowerCase(Locale.ENGLISH),
-                                KustoAuthenticationStrategy.WORKLOAD_IDENTITY.name(),
-                                KustoAuthenticationStrategy.WORKLOAD_IDENTITY.name().toLowerCase(Locale.ENGLISH)),
+                                AuthenticationStrategy.APPLICATION.name(),
+                                AuthenticationStrategy.APPLICATION.name().toLowerCase(Locale.ENGLISH),
+                                AuthenticationStrategy.MANAGED_IDENTITY.name(),
+                                AuthenticationStrategy.MANAGED_IDENTITY.name().toLowerCase(Locale.ENGLISH),
+                                AuthenticationStrategy.AZ_DEV_TOKEN.name(),
+                                AuthenticationStrategy.AZ_DEV_TOKEN.name().toLowerCase(Locale.ENGLISH),
+                                AuthenticationStrategy.WORKLOAD_IDENTITY.name(),
+                                AuthenticationStrategy.WORKLOAD_IDENTITY.name().toLowerCase(Locale.ENGLISH)),
                         ConfigDef.Importance.HIGH,
                         "Strategy to authenticate against Azure Active Directory, either ``application`` (default) or ``managed_identity``.",
                         connectionGroupName,
                         connectionGroupOrder++,
                         ConfigDef.Width.MEDIUM,
                         "Kusto Auth Strategy")
+                .define(
+                        EVENTHOUSE_AUTH_ACCESS_TOKEN_CONF,
+                        ConfigDef.Type.PASSWORD,
+                        null,
+                        ConfigDef.Importance.LOW,
+                        "Access Token for Azure Active Directory authentication",
+                        connectionGroupName,
+                        connectionGroupOrder++,
+                        ConfigDef.Width.MEDIUM,
+                        "Auth AccessToken")
                 .define(
                         EVENTHOUSE_CONNECTION_PROXY_HOST,
                         ConfigDef.Type.STRING,
@@ -262,12 +286,21 @@ public class EventHouseSinkConfig extends AbstractConfig {
         return this.getBoolean(EVENTHOUSE_USE_MANAGED_IDENTITY);
     }
 
-    public boolean isWorkloadIdentity() {
-        return this.getBoolean(EVENTHOUSE_USE_WORKLOAD_IDENTITY);
+    public String getManagedIdentityId() {
+        return this.getString(EVENTHOUSE_MANAGED_IDENTITY_ID);
     }
 
-    public KustoAuthenticationStrategy getAuthStrategy() {
-        return KustoAuthenticationStrategy.valueOf(getString(EVENTHOUSE_AUTH_STRATEGY_CONF).toUpperCase(Locale.ENGLISH));
+    public String getIngestUrl() {
+        return this.getEventhouseConnectionString().replaceFirst(PROTOCOL_SUFFIX, PROTOCOL_SUFFIX + INGEST_PREFIX);
+    }
+
+
+    public String getAuthAccessToken() {
+        return this.getPassword(EVENTHOUSE_AUTH_ACCESS_TOKEN_CONF).value();
+    }
+
+    public AuthenticationStrategy getAuthStrategy() {
+        return AuthenticationStrategy.valueOf(getString(EVENTHOUSE_AUTH_STRATEGY_CONF).toUpperCase(Locale.ENGLISH));
     }
 
     public String getRawTopicToTableMapping() {
@@ -284,6 +317,10 @@ public class EventHouseSinkConfig extends AbstractConfig {
         } catch (JsonProcessingException e) {
             throw new ConfigException("Error parsing topic to table mapping", e);
         }
+    }
+
+    public short getRetryAttempts() {
+        return getShort(EVENTHOUSE_SINK_MAX_RETRY_ATTEMPTS);
     }
 
     public long getFlushSizeBytes() {
@@ -336,12 +373,12 @@ public class EventHouseSinkConfig extends AbstractConfig {
         return props;
     }
 
-    public long getMaxRetryAttempts() {
+    public long getMaxIntervalMillis() {
         return this.getLong(EVENTHOUSE_SINK_MAX_RETRY_TIME_MS_CONF)
                 / this.getLong(EVENTHOUSE_SINK_RETRY_BACKOFF_TIME_MS_CONF);
     }
 
-    public long getRetryBackOffTimeMs() {
+    public long getRetryBackOffTimeMillis() {
         return this.getLong(EVENTHOUSE_SINK_RETRY_BACKOFF_TIME_MS_CONF);
     }
 
@@ -361,7 +398,7 @@ public class EventHouseSinkConfig extends AbstractConfig {
         }
     }
 
-    public enum KustoAuthenticationStrategy {
+    public enum AuthenticationStrategy {
         APPLICATION, MANAGED_IDENTITY, AZ_DEV_TOKEN, WORKLOAD_IDENTITY
     }
 }
