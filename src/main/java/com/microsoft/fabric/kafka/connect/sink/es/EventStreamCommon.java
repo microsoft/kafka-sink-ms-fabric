@@ -1,11 +1,11 @@
 package com.microsoft.fabric.kafka.connect.sink.es;
 
+import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
+
 import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.NotNull;
 
 public class EventStreamCommon {
     // singleton instance

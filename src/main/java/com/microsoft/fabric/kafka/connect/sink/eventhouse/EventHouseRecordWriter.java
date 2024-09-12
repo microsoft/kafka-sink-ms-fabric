@@ -16,13 +16,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.StringWriter;
 import java.net.URISyntaxException;
-import java.time.Clock;
-import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 import static com.microsoft.fabric.kafka.connect.sink.formatwriter.FormatConverter.*;
 import static org.apache.commons.lang3.SystemProperties.LINE_SEPARATOR;
@@ -55,9 +49,9 @@ public class EventHouseRecordWriter implements RecordWriter {
             return formattedRecord;
         } else {
             try (StringWriter jsonObjectWriter = new StringWriter();
-                    JsonGenerator writer = OBJECT_MAPPER.getFactory()
-                            .createGenerator(jsonObjectWriter)
-                            .setRootValueSeparator(null)) {
+                 JsonGenerator writer = OBJECT_MAPPER.getFactory()
+                         .createGenerator(jsonObjectWriter)
+                         .setRootValueSeparator(null)) {
                 Map<String, Object> parsedKeys = convertSinkRecordToMap(record, true, dataFormat).stream().reduce(new HashMap<>(),
                         (acc, map) -> {
                             acc.putAll(map);

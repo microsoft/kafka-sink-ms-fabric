@@ -1,13 +1,8 @@
 package com.microsoft.fabric.kafka.connect.sink.es;
 
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.LinkedBlockingQueue;
-
+import com.azure.messaging.eventhubs.EventData;
+import com.azure.messaging.eventhubs.EventHubProducerAsyncClient;
+import com.microsoft.fabric.kafka.connect.sink.eventhouse.internal.Version;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
@@ -19,9 +14,13 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.azure.messaging.eventhubs.EventData;
-import com.azure.messaging.eventhubs.EventHubProducerAsyncClient;
-import com.microsoft.fabric.kafka.connect.sink.Version;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import static com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkConfig.ES_MESSAGE_FORMAT;
 
@@ -75,7 +74,7 @@ public class EventStreamSinkTask extends SinkTask {
                     batch.tryAdd(sendEvent);
                     return finalEhClient.send(batch);
                 }).subscribe(unused -> {
-                },
+                        },
                         error -> log.error("Error sending batch of records", error),
                         () -> log.debug("Records sent successfully"));
 
