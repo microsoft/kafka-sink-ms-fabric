@@ -2,6 +2,8 @@ package com.microsoft.fabric.kafka.connect.sink;
 
 import com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkConfig;
 import com.microsoft.fabric.kafka.connect.sink.es.EventStreamSinkTask;
+import com.microsoft.fabric.kafka.connect.sink.eventhouse.EventHouseSinkConfig;
+import com.microsoft.fabric.kafka.connect.sink.eventhouse.EventHouseSinkTask;
 import com.microsoft.fabric.kafka.connect.sink.eventhouse.internal.Version;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -19,7 +21,7 @@ import java.util.Map;
 
 public class FabricSinkConnector extends SinkConnector {
     private static final Logger LOGGER = LoggerFactory.getLogger(FabricSinkConnector.class);
-    private SinkType sinkType = SinkType.KQLDB;
+    private SinkType sinkType = SinkType.EventHouse;
     private AbstractConfig config;
 
     @Override
@@ -28,11 +30,11 @@ public class FabricSinkConnector extends SinkConnector {
         LOGGER.info("Starting FabricSinkConnector");
         if (StringUtils.isNotEmpty(connectionString) && connectionString.startsWith("Endpoint=sb:")) {
             LOGGER.info("Detected EventStream connector using EventStream target.");
-            sinkType = SinkType.EVENTSTREAM;
+            sinkType = SinkType.EventStream;
             config = new EventStreamSinkConfig(props);
         } else {
             LOGGER.info("Detected Eventhouse URL , using KQLDb as a target.");
-            sinkType = SinkType.KQLDB;
+            sinkType = SinkType.EventHouse;
             config = new EventHouseSinkConfig(props);
         }
     }
@@ -52,21 +54,21 @@ public class FabricSinkConnector extends SinkConnector {
 
     @Override
     public void stop() {
-        LOGGER.info("Shutting down FabricSinkConnector");
+        LOGGER.info("Shutting down FabricSinkConnector for sink connector {}", sinkType.name());
     }
 
     @Override
     public ConfigDef config() {
-        if (sinkType == SinkType.EVENTSTREAM) {
+        if (sinkType == SinkType.EventStream) {
             return EventStreamSinkConfig.CONFIG_DEF;
         } else {
-            return EventHouseSinkConfig.CONFIG_DEF;
+            return EventHouseSinkConfig.getConfig();
         }
     }
 
     @Override
     public Class<? extends Task> taskClass() {
-        if (sinkType == SinkType.EVENTSTREAM) {
+        if (sinkType == SinkType.EventStream) {
             return EventStreamSinkTask.class;
         } else {
             return EventHouseSinkTask.class;
@@ -79,7 +81,7 @@ public class FabricSinkConnector extends SinkConnector {
     }
 
     enum SinkType {
-        KQLDB,
-        EVENTSTREAM
+        EventHouse,
+        EventStream
     }
 }

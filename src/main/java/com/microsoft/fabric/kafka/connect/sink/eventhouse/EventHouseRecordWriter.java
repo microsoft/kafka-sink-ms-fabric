@@ -9,14 +9,14 @@ import com.microsoft.fabric.kafka.connect.sink.formatwriter.FormatWriterHelper;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.StringWriter;
-import java.net.URISyntaxException;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.microsoft.fabric.kafka.connect.sink.formatwriter.FormatConverter.*;
 import static org.apache.commons.lang3.SystemProperties.LINE_SEPARATOR;
@@ -24,15 +24,6 @@ import static org.apache.commons.lang3.SystemProperties.LINE_SEPARATOR;
 public class EventHouseRecordWriter implements RecordWriter {
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
     private static final Logger LOGGER = LoggerFactory.getLogger(EventHouseRecordWriter.class);
-    private final List<String> bulkRequests = new ArrayList<>();
-    private final EventHouseSinkConfig config;
-
-    private transient volatile Exception flushException;
-
-    public EventHouseRecordWriter(@NotNull EventHouseSinkConfig config) throws URISyntaxException {
-        this.config = config;
-        LOGGER.info("Initializing the class from KustoSinkWriter");
-    }
 
     public String write(SinkRecord record, IngestionProperties.DataFormat dataFormat) throws IOException {
         Map<String, Object> parsedHeaders = getHeadersAsMap(record);

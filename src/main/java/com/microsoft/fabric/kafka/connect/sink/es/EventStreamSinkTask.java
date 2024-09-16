@@ -69,7 +69,7 @@ public class EventStreamSinkTask extends SinkTask {
                     if (isTextData) {
                         sendEvent = new EventData(record.value().toString());
                     } else {
-                        sendEvent = new EventData(record.va);
+                        sendEvent = new EventData("record.va");
                     }
                     batch.tryAdd(sendEvent);
                     return finalEhClient.send(batch);
