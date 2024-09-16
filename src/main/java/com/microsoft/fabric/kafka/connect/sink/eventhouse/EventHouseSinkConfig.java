@@ -24,6 +24,7 @@ public class EventHouseSinkConfig extends AbstractConfig {
     private static final String EVENTHOUSE_AUTH_ACCESS_TOKEN_CONF = "aad.auth.accesstoken";
     private static final String EVENTHOUSE_TABLES_MAPPING_CONF = "eh.tables.topics.mapping";
     private static final String EVENTHOUSE_SINK_FLUSH_SIZE_BYTES_CONF = "eh.flush.size.bytes";
+    private static final String EVENTHOUSE_SINK_FLUSH_RECORDS_CONF = "eh.flush.records";
     private static final String EVENTHOUSE_SINK_FLUSH_INTERVAL_MS_CONF = "eh.flush.interval.ms";
     private static final String EVENTHOUSE_BEHAVIOR_ON_ERROR_CONF = "behavior.on.error";
     private static final String EVENTHOUSE_DLQ_BOOTSTRAP_SERVERS_CONF = "misc.deadletterqueue.bootstrap.servers";
@@ -165,11 +166,22 @@ public class EventHouseSinkConfig extends AbstractConfig {
                         FileUtils.ONE_MB,
                         ConfigDef.Range.atLeast(100),
                         ConfigDef.Importance.MEDIUM,
-                        "Kusto sink max buffer size (per topic+partition combination).",
+                        "Sink max buffer size (per topic+partition combination).",
                         writeGroupName,
                         writeGroupOrder++,
                         ConfigDef.Width.MEDIUM,
-                        "Maximum Flush Size")
+                        "Maximum Flush Size in MB")
+                .define(
+                        EVENTHOUSE_SINK_FLUSH_RECORDS_CONF,
+                        ConfigDef.Type.LONG,
+                        100,
+                        ConfigDef.Range.atLeast(100),
+                        ConfigDef.Importance.MEDIUM,
+                        "Flush the sink every (per topic+partition combination) records.",
+                        writeGroupName,
+                        writeGroupOrder++,
+                        ConfigDef.Width.MEDIUM,
+                        "Records before flush")
                 .define(
                         EVENTHOUSE_SINK_FLUSH_INTERVAL_MS_CONF,
                         ConfigDef.Type.LONG,
@@ -323,8 +335,8 @@ public class EventHouseSinkConfig extends AbstractConfig {
         return getShort(EVENTHOUSE_SINK_MAX_RETRY_ATTEMPTS);
     }
 
-    public long getFlushSizeBytes() {
-        return getLong(EVENTHOUSE_SINK_FLUSH_SIZE_BYTES_CONF);
+    public long getMaxRecords() {
+        return getLong(EVENTHOUSE_SINK_FLUSH_RECORDS_CONF);
     }
 
     public long getFlushInterval() {

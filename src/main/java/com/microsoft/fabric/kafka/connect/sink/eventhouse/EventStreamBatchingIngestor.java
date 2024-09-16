@@ -16,7 +16,9 @@ import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.sink.SinkTaskContext;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -44,20 +46,22 @@ public class EventStreamBatchingIngestor {
     private final ScheduledExecutorService pollResultsExecutor =
             Executors.newSingleThreadScheduledExecutor();
     private final Retry retry;
-    protected volatile long lastSendTime = Instant.now(Clock.systemUTC()).toEpochMilli();
-    protected volatile long ackTime = Long.MAX_VALUE;
+    private volatile long lastSendTime = Instant.now(Clock.systemUTC()).toEpochMilli();
     private transient ScheduledFuture<?> scheduledFuture;
     private transient ScheduledExecutorService scheduler;
     private transient volatile Exception flushException;
     private transient volatile boolean closed = false;
     private transient volatile boolean checkpointInProgress = false;
+    private final TopicPartition topicPartition;
 
-
-    public EventStreamBatchingIngestor(@NotNull EventHouseSinkConfig config, @NotNull TopicToTableMapping topicToTableMap) {
+    public EventStreamBatchingIngestor(@NotNull EventHouseSinkConfig config,
+                                       @NotNull TopicToTableMapping topicToTableMap,
+                                        @NotNull TopicPartition topicPartition) {
         try {
             this.config = config;
             this.ingestClient = EventHouseClientUtil.createIngestClient(config, topicToTableMap.isStreaming());
             this.topicToTableMap = topicToTableMap;
+            this.topicPartition = topicPartition;
             this.retry = getRetries(config);
             if (config.getFlushInterval() > 0) {
                 this.scheduler = Executors.newScheduledThreadPool(1);
@@ -79,15 +83,37 @@ public class EventStreamBatchingIngestor {
         }
     }
 
-    void doBulkWrite() throws IOException {
-        if (bulkRequests.isEmpty()) {
+    void write(List<String> records) throws IOException {
+        checkFlushException();
+        while (this.checkpointInProgress) {
+            Thread.yield();
+        }
+        this.bulkRequests.addAll(records);
+        if (isOverMaxBatchSizeLimit() || isOverMaxBatchIntervalLimit()) {
+            doBulkWrite();
+        }
+    }
+
+    private boolean isOverMaxBatchSizeLimit() {
+        long bulkActions = this.config.getMaxRecords();
+        boolean isOverMaxBatchSizeLimit = bulkActions != -1 && this.bulkRequests.size() >= bulkActions;
+        if (isOverMaxBatchSizeLimit) {
+            LOGGER.debug("OverMaxBatchSizeLimit triggered at time {} with batch size {}.",
+                    Instant.now(Clock.systemUTC()), this.bulkRequests.size());
+        }
+        return isOverMaxBatchSizeLimit;
+    }
+
+
+    private void doBulkWrite() throws IOException {
+        if (this.bulkRequests.isEmpty()) {
             // no records to write
             LOGGER.debug("No records to write to DB {} & table {} ", this.topicToTableMap.getDb(),
                     this.topicToTableMap.getTable());
             return;
         }
         LOGGER.info("Ingesting to DB {} & table {} record count {}", this.topicToTableMap.getDb(),
-                this.topicToTableMap.getTable(), bulkRequests.size());
+                this.topicToTableMap.getTable(), this.bulkRequests.size());
         if (ingest()) {
             // All the ingestion has completed successfully here. Clear this batch of records
             this.bulkRequests.clear();
@@ -116,20 +142,20 @@ public class EventStreamBatchingIngestor {
 
     public void flush() throws IOException {
         checkFlushException();
-        checkpointInProgress = true;
-        while (!bulkRequests.isEmpty()) {
+        this.checkpointInProgress = true;
+        while (!this.bulkRequests.isEmpty()) {
             doBulkWrite();
         }
-        checkpointInProgress = false;
+        this.checkpointInProgress = false;
     }
 
-    public synchronized void close() throws Exception {
+    public synchronized void close() throws IOException {
         if (!closed) {
             if (scheduledFuture != null) {
                 scheduledFuture.cancel(false);
                 scheduler.shutdown();
             }
-            if (!bulkRequests.isEmpty()) {
+            if (!this.bulkRequests.isEmpty()) {
                 try {
                     doBulkWrite();
                 } catch (Exception e) {
@@ -156,7 +182,7 @@ public class EventStreamBatchingIngestor {
                 ingestionProperties.setReportMethod(IngestionProperties.IngestionReportMethod.TABLE);
                 ingestionProperties
                         .setReportLevel(IngestionProperties.IngestionReportLevel.FAILURES_AND_SUCCESSES);
-                ingestionProperties.setDataFormat(IngestionProperties.DataFormat.CSV.name());
+                ingestionProperties.setDataFormat(topicToTableMap.getFormat());
                 if (StringUtils.isNotEmpty(this.topicToTableMap.getMapping())) {
                     ingestionProperties.setIngestionMapping(this.topicToTableMap.getMapping(),
                             IngestionMapping.IngestionMappingKind.CSV);
@@ -175,25 +201,23 @@ public class EventStreamBatchingIngestor {
     }
 
     boolean ingest() throws IOException {
+
         // Get the blob
         // Write to the blob
         // have the ingest client send out request for ingestion
         // wait for result of the ingest and return true/false
-        if (bulkRequests.isEmpty()) {
+        if (this.bulkRequests.isEmpty()) {
             return true;
         }
         UUID sourceId = UUID.randomUUID();
-        // Is a side effect. Can be a bit more polished, it is easier to send the total metric in one
-        // go.
-        int recordsInBatch = 0;
+        // Is a side effect. Can be a bit more polished, it is easier to send the total metric in one go.
         try (PipedInputStream pipedInputStream = new PipedInputStream();
              PipedOutputStream pipedOutputStream = new PipedOutputStream(pipedInputStream);
              BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(pipedOutputStream))
         ) {
-            for (String request : bulkRequests) {
+            for (String request : this.bulkRequests) {
                 writer.write(request);
                 writer.newLine();
-                recordsInBatch++;
             }
             return uploadAndPollStatus(pipedInputStream, sourceId);
         } catch (IOException e) {
@@ -209,7 +233,6 @@ public class EventStreamBatchingIngestor {
             final String pollResult =
                     this.pollForCompletion(sourceId.toString(), ingestionResult, ingestionStart)
                             .get();
-            this.ackTime = Instant.now(Clock.systemUTC()).toEpochMilli();
             return OperationStatus.Succeeded.name().equals(pollResult);
         } catch (InterruptedException | ExecutionException e) {
             LOGGER.error("Error while polling for completion of ingestion.", e);
