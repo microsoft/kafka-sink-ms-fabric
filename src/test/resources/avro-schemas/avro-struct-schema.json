@@ -1,66 +1,53 @@
-{
-  "type": "record",
+{ "type": "record",
   "name": "random_avro_schema",
   "namespace": "io.confluent.avro.random.generator",
-  "fields": [
-    {
-      "name": "row",
-      "type": "int"
-    },
-    {
-      "name": "ts",
-      "type": {
-        "type": "long",
+  "fields":
+  [
+    { "name": "row", "type": "int" },
+    { "name": "ts",
+      "type":
+      { "type": "long",
         "connect.name": "org.apache.kafka.connect.data.Timestamp"
       }
     },
-    {
-      "name": "dt",
-      "type": {
+    { "name": "dt",
+      "type":
+      {
         "type": "int",
         "connect.name": "org.apache.kafka.connect.data.Date"
       }
     },
+    { "name": "optional_int_prim", "type": ["null", "int"] },
+    { "name": "bytes_prim", "type": "bytes" },
     {
-      "name": "optional_int_prim",
-      "type": [
-        "null",
-        "int"
-      ]
-    },
-    {
-      "name": "bytes_prim",
-      "type": "bytes"
-    },
-    {
-      "name": "record_field",
-      "type": {
-        "type": "record",
-        "name": "record_test",
-        "fields": [
+    "name": "record_field",
+    "type": {
+      "type": "record",
+      "name": "record_test",
+      "fields": [
+        {
+          "name": "month",
+          "type": "string"
+        },
+        {
+          "name": "day",
+          "type": "int"
+        }
+      ],
+      "arg.properties": {
+        "options": [
           {
-            "name": "month",
-            "type": "string"
+            "month": "January",
+            "day": 2
           },
           {
-            "name": "day",
-            "type": "int"
+            "month": "NANuary",
+            "day": 0
           }
-        ],
-        "arg.properties": {
-          "options": [
-            {
-              "month": "January",
-              "day": 2
-            },
-            {
-              "month": "NANuary",
-              "day": 0
-            }
-          ]
-        }
+        ]
       }
-    },
+    }
+  },
     {
       "name": "union_field",
       "type": [

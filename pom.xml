@@ -11,22 +11,23 @@
     <version>1.0.0</version>
     <properties>
         <avro.random.generator.version>0.4.1</avro.random.generator.version>
-        <awaitility.version>4.2.0</awaitility.version>
-        <az.core.version>1.51.0</az.core.version>
+        <awaitility.version>4.2.2</awaitility.version>
+        <az.core.version>1.54.1</az.core.version>
         <az.identity.version>1.13.2</az.identity.version>
-        <az.netty.version>1.15.3</az.netty.version>
+        <az.netty.version>1.15.7</az.netty.version>
         <commoncodec.version>1.17.1</commoncodec.version>
-        <commonio.version>2.16.1</commonio.version>
+        <commonio.version>2.13.0</commonio.version>
         <dependency-check-maven.version>10.0.2</dependency-check-maven.version>
-        <eventhubs.version>5.18.7</eventhubs.version>
+        <eventhubs.version>5.19.2</eventhubs.version>
         <formatter.version>2.16.0</formatter.version>
         <impsort.version>1.6.2</impsort.version>
         <java.release.version>1.8</java.release.version>
         <jsonassert.version>1.5.1</jsonassert.version>
-        <junit.version>5.10.0</junit.version>
-        <kafka.connect.avro.converter.version>7.7.0</kafka.connect.avro.converter.version>
-        <kafka.version>3.8.0</kafka.version>
-        <kusto.sdk.version>5.1.1</kusto.sdk.version>
+        <json.converter.version>0.2.15</json.converter.version>
+        <junit.version>5.11.3</junit.version>
+        <kafka.connect.avro.converter.version>7.8.0</kafka.connect.avro.converter.version>
+        <kafka.version>3.9.0</kafka.version>
+        <kusto.sdk.version>5.2.0</kusto.sdk.version>
         <mockito.version>4.11.0</mockito.version>
         <mvn.assembly.plugin.version>3.2.0</mvn.assembly.plugin.version>
         <mvn.compiler.plugin.version>3.11.0</mvn.compiler.plugin.version>
@@ -34,7 +35,7 @@
         <mvn.surefire.plugin.version>3.0.0</mvn.surefire.plugin.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <testcontainer.version>1.18.3</testcontainer.version>
-        <testcontainer.version>1.19.7</testcontainer.version>
+        <testcontainer.version>1.20.1</testcontainer.version>
     </properties>
     <build>
         <plugins>
@@ -119,7 +120,7 @@
                         </goals>
                         <configuration>
                             <includes>
-                                <include>**/*FabricSinkIT.java</include>
+                                <include>**/*SinkIT.java</include>
                             </includes>
                         </configuration>
                     </execution>
@@ -298,6 +299,12 @@
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter-engine</artifactId>
             <version>${junit.version}</version>
             <scope>test</scope>
@@ -306,6 +313,12 @@
             <groupId>io.confluent.avro</groupId>
             <artifactId>avro-random-generator</artifactId>
             <version>${avro.random.generator.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>tech.allegro.schema.json2avro</groupId>
+            <artifactId>converter</artifactId>
+            <version>${json.converter.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
