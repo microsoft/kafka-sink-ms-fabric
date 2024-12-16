@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.fasterxml.jackson.core.JsonEncoding;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -28,7 +29,7 @@ public class EventHouseRecordWriter extends HeaderAndMetadataWriter implements R
         this.plainOutputStream = out;
         try {
             this.writer = OBJECT_MAPPER.getFactory()
-                    .createGenerator(out)
+                    .createGenerator(out, JsonEncoding.UTF8)
                     .setRootValueSeparator(null);
         } catch (IOException e) {
             throw new ConnectException(e);
