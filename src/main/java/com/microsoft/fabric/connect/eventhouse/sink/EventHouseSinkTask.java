@@ -27,7 +27,6 @@ import com.azure.identity.WorkloadIdentityCredentialBuilder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.microsoft.azure.kusto.data.Client;
 import com.microsoft.azure.kusto.data.ClientFactory;
-import com.microsoft.azure.kusto.data.ClientRequestProperties;
 import com.microsoft.azure.kusto.data.HttpClientProperties;
 import com.microsoft.azure.kusto.data.auth.ConnectionStringBuilder;
 import com.microsoft.azure.kusto.ingest.IngestClient;
@@ -42,13 +41,13 @@ import com.microsoft.azure.kusto.ingest.IngestionProperties;
  * advance the offset according to it.
  */
 public class EventHouseSinkTask extends SinkTask {
-    private static final Logger log = LoggerFactory.getLogger(EventHouseSinkTask.class);
-    private static final ClientRequestProperties validateOnlyClientRequestProperties = new ClientRequestProperties();
+    private static final Logger LOGGER = LoggerFactory.getLogger(EventHouseSinkTask.class);
     private final Set<TopicPartition> assignment;
     protected IngestClient kustoIngestClient;
     protected IngestClient streamingIngestClient;
     protected Map<TopicPartition, TopicPartitionWriter> writers;
     private Map<String, TopicIngestionProperties> topicsToIngestionProps;
+    private HeaderTransforms headerTransforms;
     private FabricSinkConfig config;
     private boolean isDlqEnabled;
     private String dlqTopicName;
@@ -57,7 +56,6 @@ public class EventHouseSinkTask extends SinkTask {
     public EventHouseSinkTask() {
         assignment = new HashSet<>();
         writers = new HashMap<>();
-        validateOnlyClientRequestProperties.setOption("validate_permissions", true);
     }
 
     private static boolean isStreamingEnabled(@NotNull FabricSinkConfig config) throws JsonProcessingException {
@@ -66,7 +64,6 @@ public class EventHouseSinkTask extends SinkTask {
 
     public static @NotNull ConnectionStringBuilder createKustoEngineConnectionString(@NotNull final FabricSinkConfig config, final String clusterUrl) {
         final ConnectionStringBuilder connectionStringBuilder;
-
         switch (config.getAuthStrategy()) {
             case APPLICATION:
                 if (StringUtils.isNotEmpty(config.getAuthAppId()) && StringUtils.isNotEmpty(config.getAuthAppKey())) {
@@ -75,6 +72,11 @@ public class EventHouseSinkTask extends SinkTask {
                             config.getAuthAppId(),
                             config.getAuthAppKey(),
                             config.getAuthAuthority());
+                    // This is a special case as the APP ID is part of the ConnectionString.
+                    // For all other cases, the auth has to be done with the cluster url and then
+                    // adding the auth from the code specifically
+                } else if (StringUtils.isNotEmpty(config.getConnectionString())) {
+                    connectionStringBuilder = new ConnectionStringBuilder(config.getConnectionString());
                 } else {
                     throw new ConfigException("Kusto authentication missing App Key.");
                 }
@@ -94,16 +96,16 @@ public class EventHouseSinkTask extends SinkTask {
                             requestContext.setScopes(Collections.singletonList(clusterScope));
                             AccessToken accessToken = wic.getTokenSync(requestContext);
                             if (accessToken != null) {
-                                log.debug("Returned access token that expires at {}", accessToken.getExpiresAt());
+                                LOGGER.debug("Returned access token that expires at {}", accessToken.getExpiresAt());
                                 return accessToken.getToken();
                             } else {
-                                log.error("Obtained empty token during token refresh. Context {}", clusterScope);
+                                LOGGER.error("Obtained empty token during token refresh. Context {}", clusterScope);
                                 throw new ConnectException("Failed to retrieve WIF token");
                             }
                         });
                 break;
             case AZ_DEV_TOKEN:
-                log.warn("Using DEV-TEST mode, use this for development only. NOT recommended for production scenarios");
+                LOGGER.warn("Using DEV-TEST mode, use this for development only. NOT recommended for production scenarios");
                 connectionStringBuilder = ConnectionStringBuilder.createWithAadAccessTokenAuthentication(
                         clusterUrl,
                         config.getAuthAccessToken());
@@ -193,7 +195,7 @@ public class EventHouseSinkTask extends SinkTask {
         assignment.addAll(partitions);
         for (TopicPartition tp : assignment) {
             TopicIngestionProperties ingestionProps = getIngestionProps(tp.topic());
-            log.debug("Open Kusto topic: '{}' with partition: '{}'", tp.topic(), tp.partition());
+            LOGGER.debug("Open Kusto topic: '{}' with partition: '{}'", tp.topic(), tp.partition());
             if (ingestionProps == null) {
                 throw new ConnectException(String.format("Kusto Sink has no ingestion props mapped " +
                         "for the topic: %s. please check your configuration.", tp.topic()));
@@ -209,7 +211,7 @@ public class EventHouseSinkTask extends SinkTask {
 
     @Override
     public void close(@NotNull Collection<TopicPartition> partitions) {
-        log.warn("Closing writers in KustoSinkTask");
+        LOGGER.warn("Closing writers in KustoSinkTask");
         CountDownLatch countDownLatch = new CountDownLatch(partitions.size());
         // First stop so that no more ingestion trigger from timer flushes
         partitions.forEach((TopicPartition tp) -> writers.get(tp).stop());
@@ -219,7 +221,7 @@ public class EventHouseSinkTask extends SinkTask {
                 writers.remove(tp);
                 assignment.remove(tp);
             } catch (ConnectException e) {
-                log.error("Error closing topic partition for {}.", tp, e);
+                LOGGER.error("Error closing topic partition for {}.", tp, e);
             } finally {
                 countDownLatch.countDown();
             }
@@ -234,7 +236,7 @@ public class EventHouseSinkTask extends SinkTask {
             isDlqEnabled = true;
             dlqTopicName = config.getDlqTopicName();
             Properties properties = config.getDlqProps();
-            log.info("Initializing miscellaneous dead-letter queue producer with the following properties: {}",
+            LOGGER.info("Initializing miscellaneous dead-letter queue producer with the following properties: {}",
                     properties.keySet());
             try {
                 dlqProducer = new KafkaProducer<>(properties);
@@ -249,7 +251,7 @@ public class EventHouseSinkTask extends SinkTask {
         topicsToIngestionProps = getTopicsToIngestionProps(config);
         // this should be read properly from settings
         createKustoIngestClient(config);
-        log.info("Started KustoSinkTask with target cluster: ({}), source topics: ({})", url,
+        LOGGER.info("Started KustoSinkTask with target cluster: ({}), source topics: ({})", url,
                 topicsToIngestionProps.keySet());
         // Adding this check to make code testable
         if (context != null) {
@@ -259,7 +261,7 @@ public class EventHouseSinkTask extends SinkTask {
 
     @Override
     public void stop() {
-        log.warn("Stopping KustoSinkTask");
+        LOGGER.warn("Stopping KustoSinkTask");
         // First stop so that no more ingestion trigger from timer flushes
         for (TopicPartitionWriter writer : writers.values()) {
             writer.stop();
@@ -273,7 +275,7 @@ public class EventHouseSinkTask extends SinkTask {
                 kustoIngestClient.close();
             }
         } catch (IOException e) {
-            log.error("Error closing kusto client", e);
+            LOGGER.error("Error closing kusto client", e);
         }
     }
 
@@ -287,18 +289,25 @@ public class EventHouseSinkTask extends SinkTask {
             if (writer == null) {
                 NotFoundException e = new NotFoundException(String.format("Received a record without " +
                         "a mapped writer for topic:partition(%s:%d), dropping record.", tp.topic(), tp.partition()));
-                log.error("Error putting records: ", e);
+                LOGGER.error("Error putting records: ", e);
                 throw e;
             }
             if (sinkRecord.value() == null) {
-                log.warn("Filtering null value (tombstone) records at offset {}, key {} and partition {} ",
+                LOGGER.warn("Filtering null value (tombstone) records at offset {}, key {} and partition {} ",
                         sinkRecord.kafkaOffset(), sinkRecord.key(), sinkRecord.kafkaPartition());
             } else {
-                writer.writeRecord(sinkRecord);
+                try {
+                    if(headerTransforms == null){
+                        headerTransforms = config.headerTransforms();
+                    }
+                }catch (JsonProcessingException e){
+                    LOGGER.warn("Error parsing HeaderTransforms field: ", e);
+                }
             }
+            writer.writeRecord(sinkRecord, headerTransforms);
         }
         if (lastRecord != null) {
-            log.debug("Last record offset: {}", lastRecord.kafkaOffset());
+            LOGGER.debug("Last record offset: {}", lastRecord.kafkaOffset());
         }
     }
 
@@ -318,7 +327,7 @@ public class EventHouseSinkTask extends SinkTask {
             Long lastCommittedOffset = writers.get(tp).lastCommittedOffset;
             if (lastCommittedOffset != null) {
                 long offset = lastCommittedOffset + 1L;
-                log.debug("Forwarding to framework request to commit offset: {} for {} while the offset is {}", offset,
+                LOGGER.debug("Forwarding to framework request to commit offset: {} for {} while the offset is {}", offset,
                         tp, offsets.get(tp));
                 offsetsToCommit.put(tp, new OffsetAndMetadata(offset));
             }

@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.*;
 
 import org.apache.avro.generic.GenericData;
@@ -57,7 +59,7 @@ class EventHouseRecordWriterSchemalessTests extends EventHouseRecordWriterBase {
                     : new String(converter.convertToJson((GenericRecord) avroValue), StandardCharsets.UTF_8);
             String expectedKeyString = isSimpleKey ? avroKey.toString() : new String(converter.convertToJson((GenericRecord) avroKey), StandardCharsets.UTF_8);
             String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(Collections.singletonMap(
-                    String.format("HeaderInt-%s", i), i));
+                    String.format("HeaderInt-%s", i), String.valueOf(i)));
             expectedResultsMap.put(i, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
         }
         File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
@@ -66,7 +68,7 @@ class EventHouseRecordWriterSchemalessTests extends EventHouseRecordWriterBase {
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
         for (SinkRecord sinkRecord : records) {
-            rd.write(sinkRecord, IngestionProperties.DataFormat.JSON);
+            rd.write(sinkRecord, IngestionProperties.DataFormat.JSON,headerTransforms());
         }
         rd.commit();
         validate(file.getPath(), expectedResultsMap);
@@ -81,7 +83,7 @@ class EventHouseRecordWriterSchemalessTests extends EventHouseRecordWriterBase {
             "avro-simple-schema.json,avro-simple-schema.json,true,true"
     })
     void validateAvroDataSerializedAsBytes(String keySchemaPath, String valueSchemaPath, boolean isSimpleKey, boolean isSimpleValue)
-            throws IOException, JSONException {
+            throws IOException, JSONException, NoSuchAlgorithmException {
         List<SinkRecord> records = new ArrayList<>();
         Generator randomAvroValueData = new Generator.Builder().schemaStream(
                 Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", valueSchemaPath)))).build();
@@ -99,11 +101,17 @@ class EventHouseRecordWriterSchemalessTests extends EventHouseRecordWriterBase {
                     value,
                     i);
             sinkRecord.headers().addInt(String.format("HeaderInt-%s", i), i);
+            byte[] bytesData = new byte[20];
+            SecureRandom.getInstanceStrong().nextBytes(bytesData);
+            sinkRecord.headers().addBytes(String.format("HeaderBytes-%s", i), bytesData);
             records.add(sinkRecord);
             String expectedValueString = isSimpleValue ? RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value))
                     : new String(converter.convertToJson((GenericData.Record) value));
             String expectedKeyString = isSimpleKey ? key.toString() : new String(converter.convertToJson((GenericData.Record) key));
-            String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(Collections.singletonMap(String.format("HeaderInt-%s", i), i));
+            Map<String,Object> headerMap = new HashMap<>();
+            headerMap.put(String.format("HeaderInt-%s", i), String.valueOf(i));
+            headerMap.put(String.format("HeaderBytes-%s", i), bytesData);
+            String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(headerMap);
             expectedResultsMap.put(i, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
         }
         File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
@@ -112,7 +120,7 @@ class EventHouseRecordWriterSchemalessTests extends EventHouseRecordWriterBase {
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
         for (SinkRecord sinkRecord : records) {
-            rd.write(sinkRecord, IngestionProperties.DataFormat.AVRO);
+            rd.write(sinkRecord, IngestionProperties.DataFormat.AVRO,headerTransforms());
         }
         rd.commit();
         validate(file.getPath(), expectedResultsMap);

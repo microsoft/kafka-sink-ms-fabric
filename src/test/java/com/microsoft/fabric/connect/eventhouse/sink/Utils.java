@@ -6,17 +6,19 @@ import java.time.Instant;
 import java.util.Objects;
 
 import org.apache.commons.io.FilenameUtils;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Utils {
-    private static final Logger log = LoggerFactory.getLogger(Utils.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Utils.class);
 
     private Utils() {
     }
 
-    public static String getConnectPath() {
+    @Contract(pure = true)
+    public static @NotNull String getConnectPath() {
         return "/kafka/connect/kafka-sink-ms-fabric";
     }
 
@@ -28,7 +30,7 @@ public class Utils {
         boolean opResult = restrictPermissions(currentDirectory);
         String fullPath = currentDirectory.getAbsolutePath();
         if (!opResult) {
-            log.warn("Setting permissions on the file {} failed", fullPath);
+            LOGGER.warn("Setting permissions on the file {} failed", fullPath);
         }
         currentDirectory.deleteOnExit();
         return currentDirectory;
@@ -39,7 +41,7 @@ public class Utils {
         folder.deleteOnExit();
         boolean opResult = restrictPermissions(folder);
         if (!opResult) {
-            log.warn("Setting creating folder {} with permissions", path);
+            LOGGER.warn("Setting creating folder {} with permissions", path);
         }
         return folder.mkdirs();
     }
@@ -51,7 +53,7 @@ public class Utils {
                     file.setReadable(true, true) &&
                     file.setWritable(true, true);
         } catch (Exception ex) {
-            log.debug("Exception setting permissions on temporary test files[{}]. This is usually not a problem as it is" +
+            LOGGER.debug("Exception setting permissions on temporary test files[{}]. This is usually not a problem as it is" +
                     "run on test.To fix this, please check if there are specific security policies on test host that are" +
                     "causing this", file.getPath(), ex);
             return false;

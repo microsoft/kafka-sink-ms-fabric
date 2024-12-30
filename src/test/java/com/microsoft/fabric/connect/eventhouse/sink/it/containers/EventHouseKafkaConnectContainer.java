@@ -33,7 +33,7 @@ public class EventHouseKafkaConnectContainer extends GenericContainer<EventHouse
     private static final String KAFKA_CONNECT_IMAGE = "confluentinc/cp-kafka-connect-base";
 
     private static final int KAFKA_CONNECT_PORT = 8083;
-    private static final Logger log = LoggerFactory.getLogger(EventHouseKafkaConnectContainer.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(EventHouseKafkaConnectContainer.class);
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
 
@@ -89,7 +89,7 @@ public class EventHouseKafkaConnectContainer extends GenericContainer<EventHouse
             connectorConfiguration.put("name", name);
             connectorConfiguration.put("config", configuration);
             String postConfig = OBJECT_MAPPER.writeValueAsString(connectorConfiguration);
-            log.trace("Registering connector {} with config {}", name, postConfig);
+            LOGGER.trace("Registering connector {} with config {}", name, postConfig);
             executePOSTRequestSuccessfully(postConfig, String.format("%s/connectors", getTarget()));
             Awaitility.await()
                     .atMost(KAFKA_CONNECT_START_TIMEOUT)
@@ -115,7 +115,7 @@ public class EventHouseKafkaConnectContainer extends GenericContainer<EventHouse
 
     private static void handleFailedResponse(HttpResponse response) throws IOException {
         String responseBody = EntityUtils.toString(response.getEntity());
-        log.error("Error registering connector with error {}", responseBody);
+        LOGGER.error("Error registering connector with error {}", responseBody);
         throw new RuntimeException("Error registering connector with error " + responseBody);
     }
 
@@ -133,7 +133,7 @@ public class EventHouseKafkaConnectContainer extends GenericContainer<EventHouse
                 handleFailedResponse(response);
             }
         } catch (IOException e) {
-            log.error("Error registering connector, exception when invoking endpoint {}", fullUrl, e);
+            LOGGER.error("Error registering connector, exception when invoking endpoint {}", fullUrl, e);
         }
     }
 
@@ -149,7 +149,7 @@ public class EventHouseKafkaConnectContainer extends GenericContainer<EventHouse
                     String responseBody = EntityUtils.toString(httpResponse.getEntity());
                     Map<?, ?> responseMap = OBJECT_MAPPER.readValue(responseBody, Map.class);
                     String connectorState = (String) responseMap.get("state");
-                    log.info("Connector {} task {} state is {}", connectorName, taskNumber, connectorState);
+                    LOGGER.info("Connector {} task {} state is {}", connectorName, taskNumber, connectorState);
                     return connectorState;
                 } catch (JsonProcessingException e) {
                     throw new RuntimeException(e);

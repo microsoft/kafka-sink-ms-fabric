@@ -3,14 +3,12 @@ package com.microsoft.fabric.connect.eventhouse.sink.formatwriter;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -19,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import com.microsoft.fabric.connect.eventhouse.sink.HeaderTransforms;
 
 import io.confluent.kafka.serializers.NonRecordContainer;
 
@@ -37,11 +36,30 @@ public abstract class HeaderAndMetadataWriter {
     public static final String OFFSET = "offset";
 
     @NotNull
-    public Map<String, Object> getHeadersAsMap(@NotNull SinkRecord sinkRecord) {
+    public Map<String, Object> getHeadersAsMap(@NotNull SinkRecord sinkRecord, @NotNull HeaderTransforms headerTransforms) {
         Map<String, Object> headers = new HashMap<>();
-        sinkRecord.headers().forEach(header -> headers.put(header.key(), header.value()));
+        Set<String> headersToDrop = headerTransforms.getHeadersToDrop();
+        Set<String> headersToProject = headerTransforms.getHeadersToProject();
+        sinkRecord.headers().forEach(header -> {
+            if (shouldDropHeader(header.key(), headersToDrop)) {
+                LOGGER.trace("Dropping header: {}", header.key());
+            } else if (shouldProjectHeader(header.key(), headersToProject)) {
+                headers.put(header.key(), Values.convertToString(header.schema(), header.value()));
+            } else if (headersToProject.isEmpty()) {
+                headers.put(header.key(), Values.convertToString(header.schema(), header.value()));
+            }
+        });
         return headers;
     }
+
+    private boolean shouldDropHeader(String headerKey, Set<String> headersToDrop) {
+        return headersToDrop != null && !headersToDrop.isEmpty() && headersToDrop.contains(headerKey);
+    }
+
+    private boolean shouldProjectHeader(String headerKey, Set<String> headersToProject) {
+        return headersToProject != null && !headersToProject.isEmpty() && headersToProject.contains(headerKey);
+    }
+
 
     /**
      * Convert SinkRecord to CSV

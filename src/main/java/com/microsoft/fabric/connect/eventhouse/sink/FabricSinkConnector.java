@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -12,19 +13,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class FabricSinkConnector extends SinkConnector {
-    private static final Logger log = LoggerFactory.getLogger(FabricSinkConnector.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(FabricSinkConnector.class);
     private FabricSinkConfig config;
 
     @Override
     public void start(Map<String, String> props) {
-        log.info("Starting FabricSinkConnector.");
+        LOGGER.info("Starting FabricSinkConnector.");
         config = new FabricSinkConfig(props);
+        config.validateConfig();
     }
 
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         if (maxTasks == 0) {
-            log.warn("No Connector tasks have been configured.");
+            LOGGER.warn("No Connector tasks have been configured.");
         }
         List<Map<String, String>> configs = new ArrayList<>();
         Map<String, String> taskProps = new HashMap<>(config.originalsStrings());
@@ -36,7 +38,7 @@ public class FabricSinkConnector extends SinkConnector {
 
     @Override
     public void stop() {
-        log.info("Shutting down FabricSinkConnector");
+        LOGGER.info("Shutting down FabricSinkConnector");
     }
 
     @Override
@@ -46,7 +48,11 @@ public class FabricSinkConnector extends SinkConnector {
 
     @Override
     public Class<? extends Task> taskClass() {
-        return EventHouseSinkTask.class;
+        if(config.getFabricTarget() == FabricSinkConfig.FabricTarget.EVENTHOUSE) {
+            return EventHouseSinkTask.class;
+        } else {
+            throw new NotImplementedException("EventStream fabric target not implemented.");
+        }
     }
 
     @Override

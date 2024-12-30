@@ -32,7 +32,7 @@ import com.microsoft.fabric.connect.eventhouse.sink.formatwriter.EventHouseRecor
  * so final size can vary.
  */
 public class FileWriter implements Closeable {
-    private static final Logger log = LoggerFactory.getLogger(FileWriter.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(FileWriter.class);
     private final long flushInterval;
     private final IngestionProperties.DataFormat format;
     private final Consumer<SourceFile> onRollCallback;
@@ -96,7 +96,7 @@ public class FileWriter implements Closeable {
             if (!folder.exists()) {
                 throw new IOException(String.format("Failed to create new directory %s", folder.getPath()));
             }
-            log.warn("Couldn't create the directory because it already exists (likely a race condition)");
+            LOGGER.warn("Couldn't create the directory because it already exists (likely a race condition)");
         }
         String filePath = getFilePath.apply(offset);
         fileProps.path = filePath;
@@ -109,7 +109,7 @@ public class FileWriter implements Closeable {
              */
             String errorMessage = String.format("Exception creating local file for write." +
                     "File %s has a non canonical path", filePath);
-            throw new RuntimeException(errorMessage);
+            throw new ConnectException(errorMessage);
         }
         File file = new File(sanitizedFilePath);
         boolean createFile = file.createNewFile(); // if there is a runtime exception. It gets thrown from here
@@ -124,14 +124,14 @@ public class FileWriter implements Closeable {
                 execResult = execResult && file.setWritable(true, true);
                 execResult = execResult && file.setExecutable(false, false);
                 if (!execResult) {
-                    log.warn("Setting permissions creating file {} returned false." +
+                    LOGGER.warn("Setting permissions creating file {} returned false." +
                             "The files set for ingestion can be read by other applications having access." +
                             "Please check security policies on the host that is preventing file permissions from being applied",
                             filePath);
                 }
             } catch (Exception ex) {
                 // There is a likely chance of the permissions not getting set. This is set to warn
-                log.warn("Exception permissions creating file {} returned false." +
+                LOGGER.warn("Exception permissions creating file {} returned false." +
                         "The files set for ingestion can be read by other applications having access." +
                         "Please check security policies on the host that is preventing file permissions being applied",
                         filePath, ex);
@@ -147,7 +147,7 @@ public class FileWriter implements Closeable {
         currentFile = fileProps;
         countingStream = new CountingOutputStream(new GZIPOutputStream(fos));
         outputStream = countingStream.getOutputStream();
-        log.debug("Opened new file for writing: {}", fileProps.file);
+        LOGGER.debug("Opened new file for writing: {}", fileProps.file);
         recordWriter = recordWriterProvider.getRecordWriter(currentFile.path, countingStream);
     }
 
@@ -191,9 +191,9 @@ public class FileWriter implements Closeable {
         if (FabricSinkConfig.BehaviorOnError.FAIL == behaviorOnError) {
             throw new ConnectException(errorMessage, e);
         } else if (FabricSinkConfig.BehaviorOnError.LOG == behaviorOnError) {
-            log.error("{}", errorMessage, e);
+            LOGGER.error("{}", errorMessage, e);
         } else {
-            log.debug("{}", errorMessage, e);
+            LOGGER.debug("{}", errorMessage, e);
         }
     }
 
@@ -205,7 +205,7 @@ public class FileWriter implements Closeable {
             currentFileDescriptor = null;
             boolean deleted = Files.deleteIfExists(temp.file.toPath());
             if (!deleted) {
-                log.warn("Couldn't delete temporary file. File exists: {}", temp.file.exists());
+                LOGGER.warn("Couldn't delete temporary file. File exists: {}", temp.file.exists());
             }
         }
     }
@@ -269,11 +269,11 @@ public class FileWriter implements Closeable {
             String fileName = currentFile == null ? "[no file created yet]" : currentFile.file.getName();
             long currentSize = currentFile == null ? 0 : currentFile.rawBytes;
             flushError = String.format("Error in flushByTime. Current file: %s, size: %d. ", fileName, currentSize);
-            log.error(flushError, e);
+            LOGGER.error(flushError, e);
         }
     }
 
-    public void writeData(SinkRecord sinkRecord) throws IOException, DataException {
+    public void writeData(SinkRecord sinkRecord, HeaderTransforms headerTransforms) throws IOException, DataException {
         if (flushError != null) {
             throw new ConnectException(flushError);
         }
@@ -286,7 +286,7 @@ public class FileWriter implements Closeable {
             openFile(sinkRecord.kafkaOffset());
             resetFlushTimer(true);
         }
-        recordWriter.write(sinkRecord, this.format);
+        recordWriter.write(sinkRecord, this.format, headerTransforms);
         if (this.isDlqEnabled) {
             currentFile.records.add(sinkRecord);
         }

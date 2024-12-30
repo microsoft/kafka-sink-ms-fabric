@@ -17,6 +17,7 @@ import org.jetbrains.annotations.NotNull;
 import com.fasterxml.jackson.core.JsonEncoding;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import com.microsoft.fabric.connect.eventhouse.sink.HeaderTransforms;
 import com.microsoft.fabric.connect.eventhouse.sink.format.RecordWriter;
 
 public class EventHouseRecordWriter extends HeaderAndMetadataWriter implements RecordWriter {
@@ -40,15 +41,16 @@ public class EventHouseRecordWriter extends HeaderAndMetadataWriter implements R
     /**
      * @param sinkRecord     the record to persist.
      * @param dataFormat the data format to use.
+     * @param headerTransforms the header transforms to apply.
      * @throws IOException if an error occurs while writing the record.
      */
     @Override
-    public void write(SinkRecord sinkRecord, IngestionProperties.DataFormat dataFormat) throws IOException {
+    public void write(SinkRecord sinkRecord, IngestionProperties.DataFormat dataFormat, HeaderTransforms headerTransforms) throws IOException {
         if (schema == null) {
             schema = sinkRecord.valueSchema();
             LOGGER.debug("Opening record writer for: {}", filename);
         }
-        Map<String, Object> parsedHeaders = getHeadersAsMap(sinkRecord);
+        Map<String, Object> parsedHeaders = getHeadersAsMap(sinkRecord, headerTransforms);
         Map<String, String> kafkaMd = getKafkaMetaDataAsMap(sinkRecord);
         if (FormatWriterHelper.INSTANCE.isCsv(dataFormat)) {
             writeCsvRecord(sinkRecord, parsedHeaders, kafkaMd);

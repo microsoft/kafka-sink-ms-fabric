@@ -10,7 +10,7 @@ public class Version {
     public static final String CLIENT_NAME = "EventHouse.Kafka.Sink";
     public static final String APP_NAME = "Fabric.Kafka.Sink";
 
-    private static final Logger log = LoggerFactory.getLogger(Version.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(Version.class);
     private static final String VERSION_FILE = "/ms-eventhouse-kafka-sink-version.properties";
     private static String connectorVersion = "unknown";
 
@@ -25,7 +25,7 @@ public class Version {
                 connectorVersion = props.getProperty("version", connectorVersion).trim();
             }
         } catch (Exception e) {
-            log.warn("Error while loading version:", e);
+            LOGGER.warn("Error while loading version:", e);
         }
     }
 

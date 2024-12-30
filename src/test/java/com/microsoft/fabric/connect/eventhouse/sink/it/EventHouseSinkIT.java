@@ -26,6 +26,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.awaitility.Awaitility;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONException;
 import org.junit.jupiter.api.AfterAll;
@@ -74,7 +75,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.skyscreamer.jsonassert.JSONCompareMode.LENIENT;
 
 class EventHouseSinkIT {
-    private static final Logger log = LoggerFactory.getLogger(EventHouseSinkIT.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(EventHouseSinkIT.class);
     private static final Network network = Network.newNetwork();
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final Integer KAFKA_MAX_MSG_SIZE = 3 * 1024 * 1024;
@@ -108,24 +109,24 @@ class EventHouseSinkIT {
                     .createWithAadAccessTokenAuthentication(coordinates.ingestCluster, coordinates.accessToken);
             engineClient = ClientFactory.createClient(engineCsb);
             dmClient = ClientFactory.createClient(dmCsb);
-            log.info("Creating tables in EventHouse");
+            LOGGER.info("Creating tables in EventHouse");
             createTables();
             refreshDm();
             // Mount the libs
             String mountPath = String.format(
                     "target/kafka-sink-ms-fabric-%s-jar-with-dependencies.jar",Version.getConnectorVersion());
-            log.info("Creating connector jar with version {} and mounting it from {}", Version.getConnectorVersion(), mountPath);
+            LOGGER.info("Creating connector jar with version {} and mounting it from {}", Version.getConnectorVersion(), mountPath);
             Transferable source = MountableFile.forHostPath(mountPath);
             connectContainer.withCopyToContainer(source, Utils.getConnectPath());
             Startables.deepStart(Stream.of(kafkaContainer, schemaRegistryContainer, proxyContainer, connectContainer)).join();
-            log.info("Started containers , copying scripts to container and executing them");
+            LOGGER.info("Started containers , copying scripts to container and executing them");
             connectContainer.withCopyToContainer(MountableFile.forClasspathResource("download-libs.sh", 744), // rwx--r--r--
                     String.format("%s/download-libs.sh",Utils.getConnectPath()))
                     .execInContainer("sh",  String.format("%s/download-libs.sh",Utils.getConnectPath()));
             // Logs of start up of the container gets published here. This will be handy in case we want to look at startup failures
-            log.debug(connectContainer.getLogs());
+            LOGGER.debug(connectContainer.getLogs());
         } else {
-            log.info("Skipping test due to missing configuration");
+            LOGGER.info("Skipping test due to missing configuration");
         }
     }
 
@@ -140,10 +141,10 @@ class EventHouseSinkIT {
             try {
                 engineClient.execute(coordinates.database, kql);
             } catch (Exception e) {
-                log.error("Failed to execute kql: {}", kql, e);
+                LOGGER.error("Failed to execute kql: {}", kql, e);
             }
         });
-        log.info("Created tables {} , {} and associated mappings", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
+        LOGGER.info("Created tables {} , {} and associated mappings", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
     }
 
     private static void refreshDm() throws Exception {
@@ -157,15 +158,15 @@ class EventHouseSinkIT {
             try {
                 dmClient.execute(kql);
             } catch (Exception e) {
-                log.error("Failed to execute DM kql: {}", kql, e);
+                LOGGER.error("Failed to execute DM kql: {}", kql, e);
             }
         });
-        log.info("Refreshed cache on DB {}", coordinates.database);
+        LOGGER.info("Refreshed cache on DB {}", coordinates.database);
     }
 
     @AfterAll
     public static void stopContainers() throws Exception {
-        log.info("Finished table clean up. Dropped tables {} and {}", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
+        LOGGER.info("Finished table clean up. Dropped tables {} and {}", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
         connectContainer.stop();
         schemaRegistryContainer.stop();
         kafkaContainer.stop();
@@ -205,24 +206,24 @@ class EventHouseSinkIT {
         connectorProps.put("proxy.port", proxyContainer.getExposedPorts().get(0));
         connectorProps.putAll(overrideProps);
         connectContainer.registerConnector(String.format("adx-connector-%s", dataFormat), connectorProps);
-        log.debug("Deployed connector for {}", dataFormat);
-        log.debug(connectContainer.getLogs());
+        LOGGER.debug("Deployed connector for {}", dataFormat);
+        LOGGER.debug(connectContainer.getLogs());
         connectContainer.waitUntilConnectorTaskStateChanges(String.format("adx-connector-%s", dataFormat), 0, "RUNNING");
-        log.info("Connector state for {} : {}. ", dataFormat,
+        LOGGER.info("Connector state for {} : {}. ", dataFormat,
                 connectContainer.getConnectorTaskState(String.format("adx-connector-%s", dataFormat), 0));
     }
 
     @ParameterizedTest
     @CsvSource({"json", "avro", "csv", "bytes-json"})
     void shouldHandleAllTypesOfEvents(@NotNull String dataFormat) {
-        log.info("Running test for data format {}", dataFormat);
+        LOGGER.info("Running test for data format {}", dataFormat);
         Assumptions.assumeTrue(coordinates.isValidConfig(), "Skipping test due to missing configuration");
         String srUrl = String.format("http://%s:%s", schemaRegistryContainer.getContainerId().substring(0, 12), 8081);
         String valueFormat = "org.apache.kafka.connect.storage.StringConverter";
         String keyFormat = "org.apache.kafka.connect.storage.StringConverter";
         if (dataFormat.equals("avro")) {
             valueFormat = AvroConverter.class.getName();
-            log.debug("Using value format: {}", valueFormat);
+            LOGGER.debug("Using value format: {}", valueFormat);
         }
         String topicTableMapping = dataFormat.equals("csv")
                 ? String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'csv_mapping','streaming':'true'}]",
@@ -238,19 +239,18 @@ class EventHouseSinkIT {
                     coordinates.database,
                     coordinates.table, dataFormat.split("-")[1]);
         }
-        log.info("Deploying connector for {} , using SR url {}. Using proxy host {} and port {}", dataFormat, srUrl,
+        LOGGER.info("Deploying connector for {} , using SR url {}. Using proxy host {} and port {}", dataFormat, srUrl,
                 proxyContainer.getContainerId().substring(0, 12), proxyContainer.getExposedPorts().get(0));
         deployConnector(dataFormat, topicTableMapping, srUrl, keyFormat, valueFormat);
         try {
             produceKafkaMessages(dataFormat);
-            Thread.sleep(10_000);
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
     private void produceKafkaMessages(@NotNull String dataFormat) throws IOException {
-        log.info("Producing messages");
+        LOGGER.info("Producing messages");
         int maxRecords = 10;
         Map<String, Object> producerProperties = new HashMap<>();
         producerProperties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
@@ -304,7 +304,7 @@ class EventHouseSinkIT {
                         jsonRecordMap.put("vtype", dataFormat);
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(KEY_COLUMN).toString()),
                                 objectMapper.writeValueAsString(jsonRecordMap));
-                        log.debug("JSON Record produced: {}", objectMapper.writeValueAsString(jsonRecordMap));
+                        LOGGER.debug("JSON Record produced: {}", objectMapper.writeValueAsString(jsonRecordMap));
                         producer.send(producerRecord);
                     }
                 }
@@ -323,7 +323,7 @@ class EventHouseSinkIT {
                         Map<String, Object> jsonRecordMap = new TreeMap<>(genericRecord.getSchema().getFields().stream().parallel()
                                 .collect(Collectors.toMap(Schema.Field::name, field -> genericRecord.get(field.name()))));
                         String objectsCommaSeparated = jsonRecordMap.values().stream().map(Object::toString).collect(Collectors.joining(","));
-                        log.debug("CSV Record produced: {}", objectsCommaSeparated);
+                        LOGGER.debug("CSV Record produced: {}", objectsCommaSeparated);
                         List<Header> headers = new ArrayList<>();
                         headers.add(new RecordHeader("Iteration", (dataFormat + "-Header" + i).getBytes()));
                         ProducerRecord<String, String> producerRecord = new ProducerRecord<>("e2e.csv.topic", 0, "Key-" + i,
@@ -354,13 +354,13 @@ class EventHouseSinkIT {
                         jsonRecordMap.put("vtype", dataFormat);
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(KEY_COLUMN).toString()),
                                 objectMapper.writeValueAsString(jsonRecordMap));
-                        log.info("Bytes topic {} written to", String.format("e2e.%s.topic", dataFormat));
+                        LOGGER.info("Bytes topic {} written to", String.format("e2e.%s.topic", dataFormat));
                         try {
                             RecordMetadata rmd = producer.send(producerRecord).get();
-                            log.info("Record sent to topic {} with offset {} of size {}",
+                            LOGGER.info("Record sent to topic {} with offset {} of size {}",
                                     String.format("e2e.%s.topic", dataFormat), rmd.offset(), dataToSend.length);
                         } catch (Exception e) {
-                            log.error("Failed to send genericRecord to topic {}", String.format("e2e.%s.topic", dataFormat), e);
+                            LOGGER.error("Failed to send genericRecord to topic {}", String.format("e2e.%s.topic", dataFormat), e);
                         }
                     }
                 }
@@ -368,13 +368,13 @@ class EventHouseSinkIT {
             default:
                 throw new IllegalArgumentException("Unknown data format");
         }
-        log.info("Produced messages for format {}", dataFormat);
+        LOGGER.info("Produced messages for format {}", dataFormat);
         String query = String.format("%s | where vtype == '%s' | project  %s,vresult = pack_all()",
                 coordinates.table, dataFormat, KEY_COLUMN);
         Map<Object, String> actualRecordsIngested = getRecordsIngested(query, maxRecords);
         actualRecordsIngested.keySet().parallelStream().forEach(key -> {
             long keyLong = Long.parseLong(key.toString());
-            log.debug("Record queried in assertion : {}", actualRecordsIngested.get(key));
+            LOGGER.debug("Record queried in assertion : {}", actualRecordsIngested.get(key));
             try {
                 JSONAssert.assertEquals(expectedRecordsProduced.get(keyLong), actualRecordsIngested.get(key),
                         new CustomComparator(LENIENT,
@@ -387,7 +387,7 @@ class EventHouseSinkIT {
                 fail(e);
             }
         });
-        assertEquals(maxRecords, actualRecordsIngested.size());
+        Awaitility.await().atMost(Duration.of(30, SECONDS)).until(() -> actualRecordsIngested.size() == maxRecords);
     }
 
     @Test
@@ -441,16 +441,16 @@ class EventHouseSinkIT {
                 producerRecord.headers().add("vtype", dataFormat.getBytes());
                 producerRecord.headers().add("iteration", String.valueOf(i).getBytes());
                 RecordMetadata rmd  = producer.send(producerRecord).get();
-                log.info("Avro bytes sent to topic {} with offset {} of size {}", topicName, rmd.offset(), testData.length);
+                LOGGER.info("Avro bytes sent to topic {} with offset {} of size {}", topicName, rmd.offset(), testData.length);
             }
-            Thread.sleep(30_000);
         } catch (Exception e) {
-            log.error("Failed to send record to topic {}", topicName, e);
+            LOGGER.error("Failed to send record to topic {}", topicName, e);
             fail("Failed sending message to Kafka for testing Avro-Bytes scenario.");
         }
         String countLongQuery = String.format("%s | summarize c = count() by event_id | project %s=event_id, " +
                 "vresult = bag_pack('event_id',event_id,'count',c)", COMPLEX_AVRO_BYTES_TABLE_TEST, KEY_COLUMN);
         Map<Object, String> actualRecordsIngested = getRecordsIngested(countLongQuery, maxRecords);
+        Awaitility.await().atMost(Duration.of(30, SECONDS)).untilAsserted(() -> assertEquals(maxRecords, actualRecordsIngested.size()));
         assertEquals(expectedResultMap, actualRecordsIngested);
     }
 
@@ -464,7 +464,7 @@ class EventHouseSinkIT {
     private @NotNull Map<Object, String> getRecordsIngested(String query, int maxRecords) {
         Predicate<Object> predicate = results -> {
             if (results != null) {
-                log.info("Retrieved records count {}", ((Map<?, ?>) results).size());
+                LOGGER.info("Retrieved records count {}", ((Map<?, ?>) results).size());
             }
             return results == null || ((Map<?, ?>) results).isEmpty() || ((Map<?, ?>) results).size() < maxRecords;
         };
@@ -478,14 +478,14 @@ class EventHouseSinkIT {
         Retry retry = registry.retry("ingestRecordService", config);
         Supplier<Map<Object, String>> recordSearchSupplier = () -> {
             try {
-                log.debug("Executing query {} ", query);
+                LOGGER.debug("Executing query {} ", query);
                 KustoResultSetTable resultSet = engineClient.execute(coordinates.database, query).getPrimaryResults();
                 Map<Object, String> actualResults = new HashMap<>();
                 while (resultSet.next()) {
                     Object keyObject = resultSet.getObject(KEY_COLUMN);
                     Object key = keyObject instanceof Number ? Long.parseLong(keyObject.toString()) : keyObject.toString();
                     String vResult = resultSet.getString("vresult");
-                    log.debug("Record queried from DB: {}", vResult);
+                    LOGGER.debug("Record queried from DB: {}", vResult);
                     actualResults.put(key, vResult);
                 }
                 return actualResults;

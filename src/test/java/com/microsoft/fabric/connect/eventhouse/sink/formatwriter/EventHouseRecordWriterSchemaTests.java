@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -62,7 +64,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
             "avro-simple-schema.json,avro-simple-schema.json,true,true"
     })
     void validateAvroDataToBeSerialized(String keySchemaPath, String valueSchemaPath, boolean isSimpleKey, boolean isSimpleValue)
-            throws IOException, JSONException {
+            throws IOException, JSONException, NoSuchAlgorithmException {
         List<SinkRecord> records = new ArrayList<>();
         Generator randomAvroValueData = new Generator.Builder().schemaStream(
                 Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", valueSchemaPath)))).build();
@@ -83,11 +85,19 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
                     value,
                     i);
             sinkRecord.headers().addInt(String.format("HeaderInt-%s", i), i);
+            sinkRecord.headers().addInt(String.format("DropInt-%s", i), i);
+            byte[] bytesData = new byte[20];
+            SecureRandom.getInstanceStrong().nextBytes(bytesData);
+            sinkRecord.headers().addBytes(String.format("HeaderBytes-%s", i),bytesData);
+            sinkRecord.headers().addBytes(String.format("DropBytes-%s", i),bytesData);
             records.add(sinkRecord);
             String expectedValueString = isSimpleValue ? RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value))
                     : new String(converter.convertToJson((GenericData.Record) value));
             String expectedKeyString = isSimpleKey ? key.toString() : new String(converter.convertToJson((GenericData.Record) key));
-            String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(Collections.singletonMap(String.format("HeaderInt-%s", i), i));
+            Map<String,Object> headerMap = new HashMap<>();
+            headerMap.put(String.format("HeaderInt-%s", i), String.valueOf(i));
+            headerMap.put(String.format("HeaderBytes-%s", i), bytesData);
+            String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(headerMap);
             expectedResultsMap.put(i, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
         }
         File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
@@ -95,8 +105,8 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
-        for (SinkRecord record : records) {
-            rd.write(record, IngestionProperties.DataFormat.AVRO);
+        for (SinkRecord sinkRecord : records) {
+            rd.write(sinkRecord, IngestionProperties.DataFormat.AVRO,headerTransforms());
         }
         rd.commit();
         validate(file.getPath(), expectedResultsMap);
@@ -134,7 +144,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
 
             String expectedValueString = isSimpleValue ? RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value)) : value.toString();
             String expectedKeyString = isSimpleKey ? RESULT_MAPPER.writeValueAsString(key) : key.toString();
-            String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(Collections.singletonMap(String.format("HeaderInt-%s", i), i));
+            String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(Collections.singletonMap(String.format("HeaderInt-%s", i), String.valueOf(i)));
             expectedResultsMap.put(i, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
         }
         File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
@@ -143,7 +153,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
         for (SinkRecord sinkRecord : records) {
-            rd.write(sinkRecord, IngestionProperties.DataFormat.JSON);
+            rd.write(sinkRecord, IngestionProperties.DataFormat.JSON,headerTransforms());
         }
         rd.commit();
         validate(file.getPath(), expectedResultsMap);
@@ -179,7 +189,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
             expectedValueString = RESULT_MAPPER.writeValueAsString(expectedValues);
         }
         String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(
-                Collections.singletonMap(String.format("HeaderInt-%s", 0), 0));
+                Collections.singletonMap(String.format("HeaderInt-%s", 0), "0"));
         expectedResultsMap.put(0, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
 
         // Act
@@ -188,7 +198,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
-        rd.write(sinkRecord, IngestionProperties.DataFormat.JSON);
+        rd.write(sinkRecord, IngestionProperties.DataFormat.JSON,headerTransforms());
         // verify
         validate(file.getPath(), expectedResultsMap);
         rd.commit();

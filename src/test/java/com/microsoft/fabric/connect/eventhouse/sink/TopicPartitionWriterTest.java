@@ -15,6 +15,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.awaitility.Awaitility;
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.*;
 import org.mockito.ArgumentCaptor;
@@ -29,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.*;
 
 public class TopicPartitionWriterTest {
-    private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriterTest.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(TopicPartitionWriterTest.class);
 
     private static final String KUSTO_INGEST_CLUSTER_URL = "https://ingest-cluster.kusto.windows.net";
     private static final String KUSTO_CLUSTER_URL = "https://cluster.kusto.windows.net";
@@ -88,7 +89,7 @@ public class TopicPartitionWriterTest {
         try {
             verify(mockedClient, only()).ingestFromFile(fileSourceInfoArgument.capture(), ingestionPropertiesArgumentCaptor.capture());
         } catch (Exception e) {
-            log.error("Error running testHandleRollFile", e);
+            LOGGER.error("Error running testHandleRollFile", e);
             fail(e);
         }
 
@@ -115,7 +116,7 @@ public class TopicPartitionWriterTest {
         try {
             verify(mockedClient, only()).ingestFromFile(fileSourceInfoArgument.capture(), ingestionPropertiesArgumentCaptor.capture());
         } catch (Exception e) {
-            log.error("Error running testHandleRollFile", e);
+            LOGGER.error("Error running testHandleRollFile", e);
             fail(e);
         }
 
@@ -137,6 +138,17 @@ public class TopicPartitionWriterTest {
         }
     }
 
+    @Contract(" -> new")
+    private @NotNull HeaderTransforms getHeaderTransforms() {
+        Set<String> headersToDrop = new HashSet<>();
+        headersToDrop.add("dropHeader1");
+        headersToDrop.add("dropHeader2");
+        Set<String> headersToProject = new HashSet<>();
+        headersToProject.add("projectHeader1");
+        headersToProject.add("projectHeader2");
+        return new HeaderTransforms(headersToDrop, headersToProject);
+    }
+
     @Test
     void  testGetFilenameAfterOffsetChanges() {
         TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, dlqTopicName, kafkaProducer);
@@ -145,7 +157,7 @@ public class TopicPartitionWriterTest {
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "another,stringy,message", 5));
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "{'also':'stringy','sortof':'message'}", 4));
         for (SinkRecord sinkRecord  : records) {
-            writer.writeRecord(sinkRecord);
+            writer.writeRecord(sinkRecord,getHeaderTransforms());
         }
         try {
             File writerFile = new File(writer.getFilePath(null));
@@ -165,7 +177,7 @@ public class TopicPartitionWriterTest {
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "another,stringy,message", 3));
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "{'also':'stringy','sortof':'message'}", 4));
         for (SinkRecord sinkRecord : records) {
-            writer.writeRecord(sinkRecord);
+            writer.writeRecord(sinkRecord,getHeaderTransforms());
         }
         Assertions.assertTrue((new File(writer.fileWriter.currentFile.path)).exists());
         Assertions.assertEquals(String.format("kafka_%s_%d_%d.%s.gz", tp.topic(), tp.partition(), 4,
@@ -194,7 +206,7 @@ public class TopicPartitionWriterTest {
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.BYTES_SCHEMA, o.toByteArray(), 10));
 
         for (SinkRecord sinkRecord : records) {
-            writer.writeRecord(sinkRecord);
+            writer.writeRecord(sinkRecord,getHeaderTransforms());
         }
 
         Assertions.assertEquals(10, (long) writer.lastCommittedOffset);
@@ -221,7 +233,7 @@ public class TopicPartitionWriterTest {
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "{'also':'stringy','sortof':'message'}", 4));
 
         for (SinkRecord sinkRecord  : records) {
-            spyWriter.writeRecord(sinkRecord);
+            spyWriter.writeRecord(sinkRecord,getHeaderTransforms());
         }
         // 2 records are waiting to be ingested - expect close to revoke them so that even after 5 seconds it won't ingest
         Assertions.assertNotNull(spyWriter.lastCommittedOffset);

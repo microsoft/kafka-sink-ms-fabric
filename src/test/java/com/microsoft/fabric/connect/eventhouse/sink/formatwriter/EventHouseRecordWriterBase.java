@@ -3,23 +3,47 @@ package com.microsoft.fabric.connect.eventhouse.sink.formatwriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import org.json.JSONException;
 import org.junit.jupiter.api.Assertions;
 import org.skyscreamer.jsonassert.JSONAssert;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.type.CollectionType;
+import com.fasterxml.jackson.databind.type.TypeFactory;
+import com.microsoft.fabric.connect.eventhouse.sink.HeaderTransforms;
 
 public abstract class EventHouseRecordWriterBase {
     protected static final String KEYS = "keys";
     protected static final String HEADERS = "headers";
     protected static final String KAFKA_MD = "kafkamd";
-    protected static final ObjectMapper RESULT_MAPPER = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+    protected static final ObjectMapper RESULT_MAPPER = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS).enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
     protected static final TypeReference<Map<String, Object>> GENERIC_MAP = new TypeReference<Map<String, Object>>() {};
+
+    public HeaderTransforms headerTransforms() throws JsonProcessingException {
+        CollectionType resultType = TypeFactory.defaultInstance().constructCollectionType(Set.class, String.class);
+        String projectHeaders = "[" + IntStream.range(0,10)
+                .mapToObj(i -> new String[]{String.format("'HeaderInt-%d'", i),String.format("'HeaderBytes-%d'", i)})
+                .flatMap(Arrays::stream)
+                .collect(Collectors.joining(", ")) + "]";
+        String dropHeaders = "[" + IntStream.range(0, 10)
+                .mapToObj(i -> String.format("'DropInt-%d'", i))
+                .collect(Collectors.joining(", ")) + "]";
+
+        Set<String> headersToProject = RESULT_MAPPER.readValue(projectHeaders, resultType);
+        Set<String> headersToDrop = RESULT_MAPPER.readValue(dropHeaders, resultType);
+        return new HeaderTransforms(headersToDrop, headersToProject);
+    }
 
     protected void validate(String actualFilePath, Map<Integer, String[]> expectedResultsMap) throws IOException, JSONException {
         // Warns if the types are not generified

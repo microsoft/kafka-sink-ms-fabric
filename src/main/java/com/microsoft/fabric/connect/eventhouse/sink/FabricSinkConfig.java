@@ -16,8 +16,12 @@ import org.jetbrains.annotations.NotNull;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.type.CollectionType;
+import com.fasterxml.jackson.databind.type.TypeFactory;
+import com.microsoft.azure.kusto.data.auth.ConnectionStringBuilder;
 
 public class FabricSinkConfig extends AbstractConfig {
+    static final String CONNECTION_STRING = "connection.string";
     static final String KUSTO_INGEST_URL_CONF = "kusto.ingestion.url";
     static final String KUSTO_ENGINE_URL_CONF = "kusto.query.url";
     static final String KUSTO_AUTH_APPID_CONF = "aad.auth.appid";
@@ -39,6 +43,13 @@ public class FabricSinkConfig extends AbstractConfig {
     static final String KUSTO_SINK_ENABLE_TABLE_VALIDATION = "kusto.validation.table.enable";
     private static final String DLQ_PROPS_PREFIX = "misc.deadletterqueue.";
 
+    static final String HEADERS_TO_PROJECT = "headers.to.project";
+    static final String HEADERS_TO_DROP = "headers.to.drop";
+
+
+
+    private static final String CONNECTION_STRING_DOC = "Connection string for the sink. Can be an " +
+            "EventStream connection string or a Kusto connection string.";
     private static final String KUSTO_INGEST_URL_DOC = "Kusto ingestion endpoint URL.";
     private static final String KUSTO_INGEST_URL_DISPLAY = "Kusto cluster ingestion URL";
     private static final String KUSTO_ENGINE_URL_DOC = "Kusto query endpoint URL.";
@@ -51,6 +62,7 @@ public class FabricSinkConfig extends AbstractConfig {
     private static final String KUSTO_CONNECTION_PROXY_PORT_DOC = "Proxy port";
     private static final String KUSTO_CONNECTION_PROXY_PORT_DISPLAY = "Proxy port used to connect to Kusto";
 
+    private static final String CONNECTION_STRING_DISPLAY = "Connection string for the sink.";
     private static final String KUSTO_AUTH_APPKEY_DISPLAY = "Kusto Auth AppKey";
     private static final String KUSTO_AUTH_ACCESS_TOKEN_DISPLAY = "Kusto Auth AccessToken";
     private static final String KUSTO_AUTH_ACCESS_TOKEN_DOC = "Kusto Access Token for Azure Active Directory authentication";
@@ -104,6 +116,13 @@ public class FabricSinkConfig extends AbstractConfig {
     private static final String KUSTO_SINK_ENABLE_TABLE_VALIDATION_DOC = "Enable table access validation at task start.";
     private static final String KUSTO_SINK_ENABLE_TABLE_VALIDATION_DISPLAY = "Enable table validation";
 
+    private static final String HEADERS_TO_PROJECT_DOC = "Headers to project";
+    private static final String HEADERS_TO_PROJECT_DISPLAY = "Headers to be selected";
+
+    private static final String HEADERS_TO_DROP_DOC = "Headers to drop";
+    private static final String HEADERS_TO_DROP_DISPLAY = "Headers to be dropped";
+
+
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
 
     public FabricSinkConfig(ConfigDef config, Map<String, String> parsedConfig) {
@@ -123,14 +142,13 @@ public class FabricSinkConfig extends AbstractConfig {
             defineErrorHandlingAndRetriesConfigs(result);
             return result;
         } catch (Exception ex) {
-            throw new RuntimeException("Error initializing config. Exception ", ex);
+            throw new ConfigException("Error initializing config. Exception ", ex);
         }
     }
 
-    private static void defineErrorHandlingAndRetriesConfigs(ConfigDef result) {
+    private static void defineErrorHandlingAndRetriesConfigs(@NotNull ConfigDef result) {
         final String errorAndRetriesGroupName = "Error Handling and Retries";
         int errorAndRetriesGroupOrder = 0;
-
         result
                 .define(
                         KUSTO_BEHAVIOR_ON_ERROR_CONF,
@@ -189,7 +207,7 @@ public class FabricSinkConfig extends AbstractConfig {
                         KUSTO_SINK_RETRY_BACKOFF_TIME_MS_DISPLAY);
     }
 
-    private static void defineWriteConfigs(ConfigDef result, String tempDirectory) {
+    private static void defineWriteConfigs(@NotNull ConfigDef result, String tempDirectory) {
         final String writeGroupName = "Writes";
         int writeGroupOrder = 0;
 
@@ -235,7 +253,27 @@ public class FabricSinkConfig extends AbstractConfig {
                         writeGroupName,
                         writeGroupOrder,
                         Width.MEDIUM,
-                        KUSTO_SINK_FLUSH_INTERVAL_MS_DISPLAY);
+                        KUSTO_SINK_FLUSH_INTERVAL_MS_DISPLAY)
+                .define(
+                        HEADERS_TO_PROJECT,
+                        Type.STRING,
+                        null,
+                        Importance.LOW,
+                        HEADERS_TO_PROJECT_DOC,
+                        writeGroupName,
+                        writeGroupOrder++,
+                        Width.MEDIUM,
+                        HEADERS_TO_PROJECT_DISPLAY)
+                .define(
+                        HEADERS_TO_DROP,
+                        Type.STRING,
+                        null,
+                        Importance.LOW,
+                        HEADERS_TO_DROP_DOC,
+                        writeGroupName,
+                        writeGroupOrder,
+                        Width.MEDIUM,
+                        HEADERS_TO_DROP_DISPLAY);
     }
 
     private static void defineConnectionConfigs(@NotNull ConfigDef result) {
@@ -243,9 +281,19 @@ public class FabricSinkConfig extends AbstractConfig {
         int connectionGroupOrder = 0;
         result
                 .define(
+                        CONNECTION_STRING,
+                        Type.STRING,
+                        null,
+                        Importance.HIGH,
+                        CONNECTION_STRING_DOC,
+                        connectionGroupName,
+                        connectionGroupOrder++,
+                        Width.MEDIUM,
+                        CONNECTION_STRING_DISPLAY)
+                .define(
                         KUSTO_INGEST_URL_CONF,
                         Type.STRING,
-                        ConfigDef.NO_DEFAULT_VALUE,
+                        null,
                         Importance.HIGH,
                         KUSTO_INGEST_URL_DOC,
                         connectionGroupName,
@@ -255,7 +303,7 @@ public class FabricSinkConfig extends AbstractConfig {
                 .define(
                         KUSTO_ENGINE_URL_CONF,
                         Type.STRING,
-                        ConfigDef.NO_DEFAULT_VALUE,
+                        null,
                         Importance.LOW,
                         KUSTO_ENGINE_URL_DOC,
                         connectionGroupName,
@@ -353,12 +401,60 @@ public class FabricSinkConfig extends AbstractConfig {
                         KUSTO_CONNECTION_PROXY_PORT_DISPLAY);
     }
 
+    public String getConnectionString() {
+        return this.getString(CONNECTION_STRING);
+    }
+    public FabricTarget getFabricTarget() {
+        if(StringUtils.isNotEmpty(getConnectionString())){
+            if(getConnectionString().startsWith("sb://")) {
+                return FabricTarget.EVENTSTREAM;
+            }
+            return FabricTarget.EVENTHOUSE;
+        }
+        if(StringUtils.isNotEmpty(getKustoIngestUrl())){
+            return FabricTarget.EVENTHOUSE;
+        }
+        throw new ConfigException("Either Kusto Ingestion URL or Connection String must be provided.");
+    }
+
+
     public String getKustoIngestUrl() {
-        return this.getString(KUSTO_INGEST_URL_CONF);
+        String ingestionUrl = this.getString(KUSTO_INGEST_URL_CONF);
+        if(StringUtils.isNotEmpty(ingestionUrl)) {
+            return ingestionUrl;
+        }
+        return getUrlFromConnectionString(false);
+    }
+
+    private String getUrlFromConnectionString(boolean isEngineUrl){
+        String connectionString = this.getConnectionString();
+        if(StringUtils.isEmpty(connectionString)) {
+            throw new ConfigException("Either Kusto Ingestion URL or Connection String must be provided.");
+        } else {
+            ConnectionStringBuilder kustoConnectionStringBuilder = new ConnectionStringBuilder(connectionString);
+            String engineUrl = kustoConnectionStringBuilder.getClusterUrl();
+            if(isEngineUrl) {
+                return engineUrl;
+            } else {
+                return engineUrl.replace("https://", "https://ingest-");
+            }
+        }
+    }
+
+    public void validateConfig(){
+        if(getFabricTarget() == FabricTarget.EVENTHOUSE
+                && StringUtils.isEmpty(getKustoIngestUrl())
+                && StringUtils.isEmpty(getConnectionString())){
+            throw new ConfigException("One of kusto.ingestion.url or connection.string must be provided.");
+        }
     }
 
     public String getKustoEngineUrl() {
-        return this.getString(KUSTO_ENGINE_URL_CONF);
+        String clusterUrl = this.getString(KUSTO_ENGINE_URL_CONF);
+        if(StringUtils.isNotEmpty(clusterUrl)) {
+            return clusterUrl;
+        }
+        return getUrlFromConnectionString(true);
     }
 
     public String getAuthAppId() {
@@ -391,8 +487,19 @@ public class FabricSinkConfig extends AbstractConfig {
         for (TopicToTableMapping mapping : mappings) {
             mapping.validate();
         }
-
         return mappings;
+    }
+
+    public HeaderTransforms headerTransforms() throws JsonProcessingException {
+        CollectionType resultType = TypeFactory.defaultInstance().constructCollectionType(Set.class, String.class);
+        String headersToProjectStr = getString(HEADERS_TO_PROJECT);
+        String headersToDropStr = getString(HEADERS_TO_DROP);
+        Set<String> headersToProject =
+                StringUtils.isNotEmpty(headersToProjectStr) ?
+                        OBJECT_MAPPER.readValue(headersToProjectStr, resultType):Collections.emptySet();
+        Set<String> headersToDrop = StringUtils.isNotEmpty(headersToDropStr) ?
+                OBJECT_MAPPER.readValue(headersToDropStr, resultType):Collections.emptySet();
+        return new HeaderTransforms(headersToDrop, headersToProject);
     }
 
     public String getTempDirPath() {
@@ -480,5 +587,9 @@ public class FabricSinkConfig extends AbstractConfig {
 
     public enum KustoAuthenticationStrategy {
         APPLICATION, MANAGED_IDENTITY, AZ_DEV_TOKEN, WORKLOAD_IDENTITY
+    }
+
+    public enum FabricTarget {
+        EVENTHOUSE, EVENTSTREAM
     }
 }

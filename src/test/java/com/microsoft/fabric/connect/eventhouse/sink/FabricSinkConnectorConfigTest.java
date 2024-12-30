@@ -44,8 +44,33 @@ public class FabricSinkConnectorConfigTest {
         // Adding required Configuration with no default value.
         HashMap<String, String> settings = setupConfigs();
         settings.remove(FabricSinkConfig.KUSTO_INGEST_URL_CONF);
-        Assertions.assertThrows(ConfigException.class, () -> new FabricSinkConfig(settings));
+        FabricSinkConfig config = new FabricSinkConfig(settings);
+        Assertions.assertThrows(ConfigException.class, config::validateConfig);
     }
+
+    @ParameterizedTest
+    @CsvSource({
+            "Data Source=https://somecluster.southeastasia.dev.kusto.windows.net;" +
+                    ";Authority Id=T-1234" +
+                    ",https://ingest-somecluster.southeastasia.dev.kusto.windows.net" +
+                    ",https://somecluster.southeastasia.dev.kusto.windows.net",
+            "Data Source=https://mycluster.southeastasia.dev.kusto.windows.net;" +
+                    ";AppClientId=APP-ID;AppKey=Secret-Key;Authority Id=T-1234" +
+                    ",https://ingest-mycluster.southeastasia.dev.kusto.windows.net" +
+                    ",https://mycluster.southeastasia.dev.kusto.windows.net"
+
+    })
+    void shouldReturnEventHouseUrlsFromConnectionString(String connectionString, String ingestUrl, String engineUrl) {
+        // Adding required Configuration with no default value.
+        HashMap<String, String> settings = setupConfigs();
+        settings.remove(FabricSinkConfig.KUSTO_INGEST_URL_CONF);
+        settings.remove(FabricSinkConfig.KUSTO_ENGINE_URL_CONF);
+        settings.put(FabricSinkConfig.CONNECTION_STRING, connectionString);
+        FabricSinkConfig config = new FabricSinkConfig(settings);
+        Assertions.assertEquals(ingestUrl, config.getKustoIngestUrl());
+        Assertions.assertEquals(engineUrl, config.getKustoEngineUrl());
+    }
+
 
     @Test
     void shouldUseKustoEngineUrlWhenGiven() {

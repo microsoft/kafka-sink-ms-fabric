@@ -6,6 +6,7 @@ import java.io.IOException;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import com.microsoft.fabric.connect.eventhouse.sink.HeaderTransforms;
 
 public interface RecordWriter extends Closeable {
     /**
@@ -13,7 +14,7 @@ public interface RecordWriter extends Closeable {
      *
      * @param sinkRecord the sinkRecord to persist.
      */
-    void write(SinkRecord sinkRecord, IngestionProperties.DataFormat dataFormat) throws IOException;
+    void write(SinkRecord sinkRecord, IngestionProperties.DataFormat dataFormat, HeaderTransforms headerTransforms) throws IOException;
 
     /**
      * Close this writer.

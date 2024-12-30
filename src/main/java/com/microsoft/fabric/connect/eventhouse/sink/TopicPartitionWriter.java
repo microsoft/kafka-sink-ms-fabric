@@ -42,7 +42,7 @@ import static com.microsoft.azure.kusto.ingest.IngestionProperties.DataFormat.MU
 
 public class TopicPartitionWriter {
 
-    private static final Logger log = LoggerFactory.getLogger(TopicPartitionWriter.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(TopicPartitionWriter.class);
     private static final String COMPRESSION_EXTENSION = ".gz";
     private static final String FILE_EXCEPTION_MESSAGE = "Failed to create file or write record into file for ingestion.";
     private final TopicPartition tp;
@@ -63,7 +63,7 @@ public class TopicPartitionWriter {
     Long lastCommittedOffset;
 
     TopicPartitionWriter(TopicPartition tp, IngestClient client, TopicIngestionProperties ingestionProps,
-                         FabricSinkConfig config, boolean isDlqEnabled, String dlqTopicName, Producer<byte[], byte[]> dlqProducer) {
+                         @NotNull FabricSinkConfig config, boolean isDlqEnabled, String dlqTopicName, Producer<byte[], byte[]> dlqProducer) {
         this.tp = tp;
         this.client = client;
         this.ingestionProps = ingestionProps;
@@ -103,7 +103,7 @@ public class TopicPartitionWriter {
                     if (!hasStreamingSucceeded(ingestionStatus)) {
                         retryAttempts += ManagedStreamingIngestClient.ATTEMPT_COUNT;
                         backOffForRemainingAttempts(retryAttempts, null, fileDescriptor);
-                        log.debug("Kusto ingestion: Streaming of file ({}) of size ({}) at current offset ({}) did NOT succeed; will retry",
+                        LOGGER.debug("Kusto ingestion: Streaming of file ({}) of size ({}) at current offset ({}) did NOT succeed; will retry",
                                 fileDescriptor.path, fileDescriptor.rawBytes, currentOffset);
                         continue;
                     }
@@ -113,7 +113,7 @@ public class TopicPartitionWriter {
                         && !ingestionResult.getIngestionStatusCollection().isEmpty()){
                     ingestionStatus = ingestionResult.getIngestionStatusCollection().get(0);
                 }
-                log.info("Kusto ingestion: file ({}) of size ({}) at current offset ({}) with status ({})",
+                LOGGER.info("Kusto ingestion: file ({}) of size ({}) at current offset ({}) with status ({})",
                         fileDescriptor.path, fileDescriptor.rawBytes, currentOffset,ingestionStatus);
                 this.lastCommittedOffset = currentOffset;
                 return;
@@ -126,7 +126,7 @@ public class TopicPartitionWriter {
                     }
                 }
                 // retrying transient exceptions
-                log.error("IngestionServiceException when ingesting data into KustoDB, file: {}, database: {}, table: {}, operationId: {}",
+                LOGGER.error("IngestionServiceException when ingesting data into KustoDB, file: {}, database: {}, table: {}, operationId: {}",
                         fileDescriptor.path, ingestionProps.ingestionProperties.getDatabaseName(),
                         ingestionProps.ingestionProperties.getTableName(),
                         ingestionProps.ingestionProperties.getIngestionMapping().getIngestionMappingReference(),exception);
@@ -153,7 +153,7 @@ public class TopicPartitionWriter {
                 String failureStatus = status.getFailureStatus();
                 String details = status.getDetails();
                 UUID ingestionSourceId = status.getIngestionSourceId();
-                log.warn("A batch of streaming records has {} ingestion: table:{}, database:{}, operationId: {}," +
+                LOGGER.warn("A batch of streaming records has {} ingestion: table:{}, database:{}, operationId: {}," +
                         "ingestionSourceId: {}{}{}.\n" +
                         "Status is final and therefore ingestion won't be retried and data won't reach dlq",
                         status.getStatus(),
@@ -174,14 +174,14 @@ public class TopicPartitionWriter {
             // RetryUtil can be deleted if exponential backOff is not required, currently using constant backOff.
             long sleepTimeMs = retryBackOffTime;
             if(exception!=null) {
-                log.error("Failed to ingest records into Kusto, backing off and retrying ingesting records " +
+                LOGGER.error("Failed to ingest records into Kusto, backing off and retrying ingesting records " +
                         "after {} milliseconds.", sleepTimeMs, exception);
             }
             try {
                 TimeUnit.MILLISECONDS.sleep(sleepTimeMs);
             } catch (InterruptedException interruptedErr) {
                 if (isDlqEnabled && behaviorOnError != BehaviorOnError.FAIL) {
-                    log.warn("InterruptedException:: Writing {} failed records to miscellaneous dead-letter queue topic={}",
+                    LOGGER.warn("InterruptedException:: Writing {} failed records to miscellaneous dead-letter queue topic={}",
                             fileDescriptor.records.size(), dlqTopicName);
                     fileDescriptor.records.forEach(this::sendFailedRecordToDlq);
                 }
@@ -191,7 +191,7 @@ public class TopicPartitionWriter {
             }
         } else {
             if (isDlqEnabled && behaviorOnError != BehaviorOnError.FAIL) {
-                log.warn("Retries exhausted, writing {} failed records to miscellaneous dead-letter queue topic={}",
+                LOGGER.warn("Retries exhausted, writing {} failed records to miscellaneous dead-letter queue topic={}",
                         fileDescriptor.records.size(), dlqTopicName);
                 fileDescriptor.records.forEach(this::sendFailedRecordToDlq);
             }
@@ -216,7 +216,7 @@ public class TopicPartitionWriter {
                 }
             });
         } catch (IllegalStateException e) {
-            log.error("Failed to write records to miscellaneous dead-letter queue topic, "
+            LOGGER.error("Failed to write records to miscellaneous dead-letter queue topic, "
                     + "kafka producer has already been closed. Exception={0}", e);
         }
     }
@@ -230,11 +230,11 @@ public class TopicPartitionWriter {
                 ingestionProps.ingestionProperties.getDataFormat(), COMPRESSION_EXTENSION)).toString();
     }
 
-    void writeRecord(SinkRecord sinkRecord) throws ConnectException {
+    void writeRecord(SinkRecord sinkRecord,HeaderTransforms headerTransforms) throws ConnectException {
         if (sinkRecord != null) {
             try (AutoCloseableLock ignored = new AutoCloseableLock(reentrantReadWriteLock.readLock())) {
                 this.currentOffset = sinkRecord.kafkaOffset();
-                fileWriter.writeData(sinkRecord);
+                fileWriter.writeData(sinkRecord, headerTransforms);
             } catch (IOException | DataException ex) {
                 handleErrors(sinkRecord, ex);
             }
@@ -245,10 +245,10 @@ public class TopicPartitionWriter {
         if (BehaviorOnError.FAIL == behaviorOnError) {
             throw new ConnectException(FILE_EXCEPTION_MESSAGE, ex);
         } else if (BehaviorOnError.LOG == behaviorOnError) {
-            log.error(FILE_EXCEPTION_MESSAGE, ex);
+            LOGGER.error(FILE_EXCEPTION_MESSAGE, ex);
             sendFailedRecordToDlq(sinkRecord);
         } else {
-            log.debug(FILE_EXCEPTION_MESSAGE, ex);
+            LOGGER.debug(FILE_EXCEPTION_MESSAGE, ex);
             sendFailedRecordToDlq(sinkRecord);
         }
     }
@@ -272,19 +272,19 @@ public class TopicPartitionWriter {
             fileWriter.rollback();
             fileWriter.close();
         } catch (IOException e) {
-            log.error("Failed to rollback with exception={0}", e);
+            LOGGER.error("Failed to rollback with exception={0}", e);
         }
         try {
             if (dlqProducer != null) {
                 dlqProducer.close();
             }
         } catch (Exception e) {
-            log.error("Failed to close kafka producer={0}", e);
+            LOGGER.error("Failed to close kafka producer={0}", e);
         }
         try {
             FileUtils.deleteDirectory(new File(basePath));
         } catch (IOException e) {
-            log.error("Unable to delete temporary connector folder {}", basePath);
+            LOGGER.error("Unable to delete temporary connector folder {}", basePath);
         }
     }
 
@@ -296,7 +296,7 @@ public class TopicPartitionWriter {
         IngestionProperties updatedIngestionProperties = new IngestionProperties(this.ingestionProps.ingestionProperties);
         IngestionProperties.DataFormat sourceFormat = ingestionProps.ingestionProperties.getDataFormat();
         if (FormatWriterHelper.INSTANCE.isSchemaFormat(sourceFormat)) {
-            log.debug("Incoming dataformat {}, setting target format to MULTIJSON", sourceFormat);
+            LOGGER.debug("Incoming dataformat {}, setting target format to MULTIJSON", sourceFormat);
             updatedIngestionProperties.setDataFormat(MULTIJSON);
         } else {
             updatedIngestionProperties.setDataFormat(ingestionProps.ingestionProperties.getDataFormat());

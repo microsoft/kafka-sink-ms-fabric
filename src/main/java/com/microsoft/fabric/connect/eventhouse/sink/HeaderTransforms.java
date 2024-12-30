@@ -1,30 +1,34 @@
 package com.microsoft.fabric.connect.eventhouse.sink;
 
-import java.util.List;
+import java.util.Set;
 
 public class HeaderTransforms {
-    public List<String> getHeadersToFilter() {
-        return headersToFilter;
+
+    private Set<String> headersToProject;
+    private Set<String> headersToDrop;
+
+    public Set<String> getHeadersToProject() {
+        return headersToProject;
     }
 
-    public void setHeadersToFilter(List<String> headersToFilter) {
-        this.headersToFilter = headersToFilter;
+    public void setHeadersToProject(Set<String> headersToProject) {
+        this.headersToProject = headersToProject;
     }
 
-    public boolean isEncodeHeadersToB64() {
-        return encodeHeadersToB64;
+    public Set<String> getHeadersToDrop() {
+        return headersToDrop;
     }
 
-    public void setEncodeHeadersToB64(boolean encodeHeadersToB64) {
-        this.encodeHeadersToB64 = encodeHeadersToB64;
+    public void setHeadersToDrop(Set<String> headersToDrop) {
+        this.headersToDrop = headersToDrop;
     }
 
-    private List<String> headersToFilter;
-
-    public HeaderTransforms(List<String> headersToFilter, boolean encodeHeadersToB64) {
-        this.headersToFilter = headersToFilter;
-        this.encodeHeadersToB64 = encodeHeadersToB64;
+    public HeaderTransforms(Set<String> headersToDrop, Set<String> headersToProject) {
+        this.headersToProject = headersToProject;
+        this.headersToDrop = headersToDrop;
+    }
+    public HeaderTransforms() {
+        // No args constructor for serialization
     }
 
-    private boolean encodeHeadersToB64;
 }
