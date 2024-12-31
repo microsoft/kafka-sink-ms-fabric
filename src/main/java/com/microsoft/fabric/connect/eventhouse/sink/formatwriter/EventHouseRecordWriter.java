@@ -45,7 +45,8 @@ public class EventHouseRecordWriter extends HeaderAndMetadataWriter implements R
      * @throws IOException if an error occurs while writing the record.
      */
     @Override
-    public void write(SinkRecord sinkRecord, IngestionProperties.DataFormat dataFormat, HeaderTransforms headerTransforms) throws IOException {
+    public void write(SinkRecord sinkRecord, IngestionProperties.DataFormat dataFormat,
+                      HeaderTransforms headerTransforms) throws IOException {
         if (schema == null) {
             schema = sinkRecord.valueSchema();
             LOGGER.debug("Opening record writer for: {}", filename);
@@ -61,37 +62,50 @@ public class EventHouseRecordWriter extends HeaderAndMetadataWriter implements R
                         return acc;
                     });
             Collection<Map<String, Object>> parsedValues = convertSinkRecordToMap(sinkRecord, false, dataFormat);
-            writeJsonRecord(sinkRecord, parsedValues, parsedKeys, parsedHeaders, kafkaMd);
+            this.writeJsonRecord(sinkRecord, parsedValues, parsedKeys, parsedHeaders, kafkaMd);
         }
     }
 
-    private void writeJsonRecord(SinkRecord sinkRecord, @NotNull Collection<Map<String, Object>> parsedValues, Map<String, Object> parsedKeys, Map<String, Object> parsedHeaders, Map<String, String> kafkaMd) throws IOException {
-        for(Map<String, Object> parsedValue: parsedValues){
-            Map<String, Object> updatedValue = (sinkRecord.value() == null) ? new HashMap<>() : new HashMap<>(parsedValue);
-            /* Add all the key fields */
-            if (sinkRecord.key() != null) {
-                if (parsedKeys.size() == 1 && parsedKeys.containsKey(KEY_FIELD)) {
-                    updatedValue.put(KEYS_FIELD, parsedKeys.get(KEY_FIELD));
-                } else {
-                    updatedValue.put(KEYS_FIELD, parsedKeys);
-                }
+    private void writeJsonRecord(@NotNull SinkRecord sinkRecord, @NotNull Collection<Map<String, Object>> parsedValues,
+                                 Map<String, Object> parsedKeys, Map<String, Object> parsedHeaders,
+                                 Map<String, String> kafkaMd) throws IOException {
+        if(parsedValues.isEmpty()){
+            createRecord(sinkRecord, parsedKeys, parsedHeaders, kafkaMd, new HashMap<>());
+        } else {
+            for (Map<String, Object> parsedValue : parsedValues) {
+                Map<String, Object> updatedValue = new HashMap<>(parsedValue);
+                createRecord(sinkRecord, parsedKeys, parsedHeaders, kafkaMd, updatedValue);
             }
-            /* End add key fields */
-            /* Add record headers */
-            if (sinkRecord.headers() != null && !sinkRecord.headers().isEmpty()) {
-                updatedValue.put(HEADERS_FIELD, parsedHeaders);
-            }
-            /* End record headers */
-            /* Add metadata fields */
-            updatedValue.put(KAFKA_METADATA_FIELD, kafkaMd);
-            /* End metadata fields */
-            /* Write out each value row with key and header fields */
-            writer.writeObject(updatedValue);
-            writer.writeRaw(LINE_SEPARATOR);
         }
     }
 
-    private void writeCsvRecord(SinkRecord inSinkRecord, Map<String, Object> parsedHeaders, Map<String, String> kafkaMd) throws IOException {
+    private void createRecord(@NotNull SinkRecord sinkRecord, Map<String, Object> parsedKeys,
+                              Map<String, Object> parsedHeaders, Map<String, String> kafkaMd,
+                              Map<String, Object> updatedValue) throws IOException {
+        /* Add all the key fields */
+        if (sinkRecord.key() != null) {
+            if (parsedKeys.size() == 1 && parsedKeys.containsKey(KEY_FIELD)) {
+                updatedValue.put(KEYS_FIELD, parsedKeys.get(KEY_FIELD));
+            } else {
+                updatedValue.put(KEYS_FIELD, parsedKeys);
+            }
+        }
+        /* End add key fields */
+        /* Add record headers */
+        if (sinkRecord.headers() != null && !sinkRecord.headers().isEmpty()) {
+            updatedValue.put(HEADERS_FIELD, parsedHeaders);
+        }
+        /* End record headers */
+        /* Add metadata fields */
+        updatedValue.put(KAFKA_METADATA_FIELD, kafkaMd);
+        /* End metadata fields */
+        /* Write out each value row with key and header fields */
+        writer.writeObject(updatedValue);
+        writer.writeRaw(LINE_SEPARATOR);
+    }
+
+    private void writeCsvRecord(SinkRecord inSinkRecord, Map<String, Object> parsedHeaders,
+                                Map<String, String> kafkaMd) throws IOException {
         String serializedKeys = StringEscapeUtils.escapeCsv(convertSinkRecordToCsv(inSinkRecord, true));
         String serializedValues = convertSinkRecordToCsv(inSinkRecord, false);
         String serializedHeaders = StringEscapeUtils.escapeCsv(OBJECT_MAPPER.writeValueAsString(parsedHeaders));

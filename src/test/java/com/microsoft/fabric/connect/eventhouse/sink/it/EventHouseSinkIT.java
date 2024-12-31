@@ -18,6 +18,7 @@ import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -44,10 +45,11 @@ import org.testcontainers.containers.Network;
 import org.testcontainers.images.builder.Transferable;
 import org.testcontainers.kafka.ConfluentKafkaContainer;
 import org.testcontainers.lifecycle.Startables;
-import org.testcontainers.shaded.com.fasterxml.jackson.databind.ObjectMapper;
 import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.azure.kusto.data.Client;
 import com.microsoft.azure.kusto.data.ClientFactory;
 import com.microsoft.azure.kusto.data.KustoResultSetTable;
@@ -70,14 +72,13 @@ import io.github.resilience4j.retry.RetryRegistry;
 
 import static com.microsoft.fabric.connect.eventhouse.sink.it.ITSetup.getConnectorProperties;
 import static java.time.temporal.ChronoUnit.SECONDS;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.skyscreamer.jsonassert.JSONCompareMode.LENIENT;
 
 class EventHouseSinkIT {
     private static final Logger LOGGER = LoggerFactory.getLogger(EventHouseSinkIT.class);
     private static final Network network = Network.newNetwork();
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Integer KAFKA_MAX_MSG_SIZE = 3 * 1024 * 1024;
     private static final String CONFLUENT_VERSION = "7.5.6";
     private static final String KAFKA_LISTENER = "kafka:19092";
@@ -213,7 +214,7 @@ class EventHouseSinkIT {
                 connectContainer.getConnectorTaskState(String.format("adx-connector-%s", dataFormat), 0));
     }
 
-    @ParameterizedTest
+    @ParameterizedTest(name = "Test for data format {0}")
     @CsvSource({"json", "avro", "csv", "bytes-json"})
     void shouldHandleAllTypesOfEvents(@NotNull String dataFormat) {
         LOGGER.info("Running test for data format {}", dataFormat);
@@ -243,15 +244,20 @@ class EventHouseSinkIT {
                 proxyContainer.getContainerId().substring(0, 12), proxyContainer.getExposedPorts().get(0));
         deployConnector(dataFormat, topicTableMapping, srUrl, keyFormat, valueFormat);
         try {
-            produceKafkaMessages(dataFormat);
+            int maxRecords = 10;
+            Map<Long, String> expectedRecordsProduced = produceKafkaMessages(dataFormat, maxRecords);
+            if(expectedRecordsProduced.isEmpty()){
+                performTombstoneAssertions();
+            }else {
+                performDataAssertions(dataFormat, maxRecords, expectedRecordsProduced);
+            }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private void produceKafkaMessages(@NotNull String dataFormat) throws IOException {
+    private @NotNull Map<Long, String> produceKafkaMessages(@NotNull String dataFormat, int maxRecords) throws IOException {
         LOGGER.info("Producing messages");
-        int maxRecords = 10;
         Map<String, Object> producerProperties = new HashMap<>();
         producerProperties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
         // avro
@@ -279,7 +285,7 @@ class EventHouseSinkIT {
                                 .collect(Collectors.toMap(Schema.Field::name, field -> genericRecord.get(field.name())));
                         jsonRecordMap.put("vtype", "avro");
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(KEY_COLUMN).toString()),
-                                objectMapper.writeValueAsString(jsonRecordMap));
+                                OBJECT_MAPPER.writeValueAsString(jsonRecordMap));
                         producer.send(producerRecord);
                     }
                 }
@@ -300,12 +306,15 @@ class EventHouseSinkIT {
                         List<Header> headers = new ArrayList<>();
                         headers.add(new RecordHeader("Iteration", (dataFormat + "-Header" + i).getBytes()));
                         ProducerRecord<String, String> producerRecord = new ProducerRecord<>("e2e.json.topic",
-                                0, "Key-" + i, objectMapper.writeValueAsString(jsonRecordMap), headers);
+                                0, "Key-" + i, OBJECT_MAPPER.writeValueAsString(jsonRecordMap), headers);
                         jsonRecordMap.put("vtype", dataFormat);
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(KEY_COLUMN).toString()),
-                                objectMapper.writeValueAsString(jsonRecordMap));
-                        LOGGER.debug("JSON Record produced: {}", objectMapper.writeValueAsString(jsonRecordMap));
+                                OBJECT_MAPPER.writeValueAsString(jsonRecordMap));
+                        LOGGER.debug("JSON Record produced: {}", OBJECT_MAPPER.writeValueAsString(jsonRecordMap));
                         producer.send(producerRecord);
+                        ProducerRecord<String, String> tombstoneRecord = new ProducerRecord<>("e2e.json.topic",
+                                0, "TSKey-" + i, null, headers);
+                        producer.send(tombstoneRecord);
                     }
                 }
                 break;
@@ -330,7 +339,7 @@ class EventHouseSinkIT {
                                 objectsCommaSeparated, headers);
                         jsonRecordMap.put("vtype", dataFormat);
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(KEY_COLUMN).toString()),
-                                objectMapper.writeValueAsString(jsonRecordMap));
+                                OBJECT_MAPPER.writeValueAsString(jsonRecordMap));
                         producer.send(producerRecord);
                     }
                 }
@@ -353,7 +362,7 @@ class EventHouseSinkIT {
                                 dataToSend);
                         jsonRecordMap.put("vtype", dataFormat);
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(KEY_COLUMN).toString()),
-                                objectMapper.writeValueAsString(jsonRecordMap));
+                                OBJECT_MAPPER.writeValueAsString(jsonRecordMap));
                         LOGGER.info("Bytes topic {} written to", String.format("e2e.%s.topic", dataFormat));
                         try {
                             RecordMetadata rmd = producer.send(producerRecord).get();
@@ -369,6 +378,11 @@ class EventHouseSinkIT {
                 throw new IllegalArgumentException("Unknown data format");
         }
         LOGGER.info("Produced messages for format {}", dataFormat);
+        return expectedRecordsProduced;
+
+    }
+
+    private void performDataAssertions(@NotNull String dataFormat, int maxRecords, Map<Long, String> expectedRecordsProduced) {
         String query = String.format("%s | where vtype == '%s' | project  %s,vresult = pack_all()",
                 coordinates.table, dataFormat, KEY_COLUMN);
         Map<Object, String> actualRecordsIngested = getRecordsIngested(query, maxRecords);
@@ -387,7 +401,29 @@ class EventHouseSinkIT {
                 fail(e);
             }
         });
-        Awaitility.await().atMost(Duration.of(30, SECONDS)).until(() -> actualRecordsIngested.size() == maxRecords);
+    }
+
+    private static void performTombstoneAssertions() {
+        try {
+            String tsQuery = String.format("%s | where keys startswith 'TSKey'|project vresult = pack_all()", coordinates.table);
+            KustoResultSetTable tsResultSet = engineClient.execute(coordinates.database, tsQuery).getPrimaryResults();
+            TypeReference<Map<String,Object>> mapResultRef
+                    = new TypeReference<Map<String,Object>>() {};
+            while(tsResultSet.next()) {
+                String nullRecords = tsResultSet.getString("vresult");
+                Map<String,Object> parsedResult = OBJECT_MAPPER.readValue(nullRecords,mapResultRef);
+                parsedResult.forEach((key,value) -> {
+                        if(key.startsWith("v")) {
+                            assertTrue(StringUtils.isEmpty(value.toString()), "Field " + key + " " +
+                                    "should be null/empty but is " + value);
+                        } else {
+                            assertNotNull(value, "Field " + key + " is null");
+                        }
+                });
+            }
+        } catch (Exception e) {
+            fail(e);
+        }
     }
 
     @Test

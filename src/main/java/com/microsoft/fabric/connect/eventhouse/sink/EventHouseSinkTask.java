@@ -293,16 +293,15 @@ public class EventHouseSinkTask extends SinkTask {
                 throw e;
             }
             if (sinkRecord.value() == null) {
-                LOGGER.warn("Filtering null value (tombstone) records at offset {}, key {} and partition {} ",
+                LOGGER.warn("Tombstone record at offset {}, key {} and partition {} ",
                         sinkRecord.kafkaOffset(), sinkRecord.key(), sinkRecord.kafkaPartition());
-            } else {
-                try {
-                    if(headerTransforms == null){
-                        headerTransforms = config.headerTransforms();
-                    }
-                }catch (JsonProcessingException e){
-                    LOGGER.warn("Error parsing HeaderTransforms field: ", e);
+            }
+            try {
+                if(headerTransforms == null){
+                    headerTransforms = config.headerTransforms();
                 }
+            } catch (JsonProcessingException e){
+                LOGGER.warn("Error parsing HeaderTransforms field: ", e);
             }
             writer.writeRecord(sinkRecord, headerTransforms);
         }
