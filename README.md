@@ -1,4 +1,139 @@
-# Repository setup required :wave:
+# Fabric Kafka Connect Kusto Sink Connector
+
+This repository contains the source code of the Kafka Connect Fabric sink connector. Currently supports writing data to
+Eventhouse (Azure Data Explorer / Kusto) workloads on Fabric.
+
+
+## Sections in the document
+
+<!-- TOC -->
+* [Fabric Kafka Connect Kusto Sink Connector](#fabric-kafka-connect-kusto-sink-connector)
+  * [Sections in the document](#sections-in-the-document)
+  * [1. Overview](#1-overview)
+  * [2. Design](#2-design)
+  * [3. Features supported](#3-features-supported)
+    * [3.1. Configurable behavior on errors](#31-configurable-behavior-on-errors)
+    * [3.2. Configurable retries](#32-configurable-retries)
+    * [3.3. Serialization formats](#33-serialization-formats)
+    * [3.4. Schema registry](#34-schema-registry)
+    * [3.5. Kafka Connect converters](#35-kafka-connect-converters)
+    * [3.6. Kafka Connect transformers](#36-kafka-connect-transformers)
+    * [3.7. Topics to tables mapping](#37-topics-to-tables-mapping)
+    * [3.8. Kafka Connect Dead Letter Queue](#38-kafka-connect-dead-letter-queue)
+    * [3.9. Miscellaneous Dead Letter Queue](#39-miscellaneous-dead-letter-queue)
+    * [3.11. Delivery semantics](#311-delivery-semantics)
+    * [3.12. Overrides](#312-overrides)
+    * [3.13. Parallelism](#313-parallelism)
+    * [3.14. Authentication & Authorization to Azure Data Explorer](#314-authentication--authorization-to-azure-data-explorer)
+    * [3.16. Security related](#316-security-related)
+  * [4. Connect worker properties](#4-connect-worker-properties)
+    * [4.1. Confluent Cloud](#41-confluent-cloud)
+  * [5. Sink properties](#5-sink-properties)
+  * [6. Streaming ingestion](#6-streaming-ingestion)
+  * [7. Roadmap](#7-roadmap)
+  * [8. Deployment overview](#8-deployment-overview)
+    * [8.1. Standalone Kafka Connect deployment mode](#81-standalone-kafka-connect-deployment-mode)
+    * [8.2. Distributed Kafka Connect deployment mode](#82-distributed-kafka-connect-deployment-mode)
+  * [9. Connector download/build from source](#9-connector-downloadbuild-from-source)
+    * [9.1. Download a ready-to-use uber jar from our Github repo releases listing](#91-download-a-ready-to-use-uber-jar-from-our-github-repo-releases-listing)
+    * [9.2. Build uber jar from source](#92-build-uber-jar-from-source)
+  * [10. Test drive the connector - standalone mode](#10-test-drive-the-connector---standalone-mode)
+    * [10.1. Self-contained Dockerized setup](#101-self-contained-dockerized-setup)
+  * [11. Release History](#11-release-history)
+  * [12. Contributing](#12-contributing)
+<!-- TOC -->
+<hr>
+
+## 1. Overview
+
+The Fabric connector for Kafka intends to provide an extensible, scalable, and fault-tolerant way to ingest data from 
+Kafka to [Microsoft Fabric](https://www.microsoft.com/en-us/microsoft-fabric). The initial release intends to support
+writes to [Eventhouse](https://learn.microsoft.com/en-us/fabric/real-time-intelligence/eventhouse). Future releases will
+add support for [Eventstreams](https://learn.microsoft.com/en-us/fabric/real-time-intelligence/event-streams/overview)
+
+<hr>
+
+## 2. Design
+The connector is designed to be a sink connector, ingesting data from Kafka to components in Microsoft Fabric. The initial
+design is based on [Kafka Kusto Sink](https://github.com/Azure/kafka-sink-azure-kusto) with slight changes to the 
+ingestion process.
+
+The connector parses payload based on type of message and ingests the data to ADX. The ingestion to ADX uses JSON as the format.
+
+* **kafkamd** : Dynamic field that contains metadata about the message. This field is used to store the partition, 
+offset, and topic of the message.
+* **headers** : Dynamic field that contains headers set in the message.
+* **keys** : Dynamic field that has the keys in the kafka message.
+
+Values in the message are stored in the root of the message as-is. In the sample below the fields department, id, external_identifier
+external_id_type are stored in the root of the message.
+
+**Note**: 
+  * The fields in the message should not have the same name as the fields in the dynamic fields. If the fields have the same name, the values in the dynamic fields will be overwritten by the values in the root of the message.
+
+  * Tombstone records are supported. The value columns will be null and the keys, metadata and header columns will be populated.
+
+```json
+{
+  "kafkamd": {
+    "partition": "0",
+    "offset": "1",
+    "topic": "e2e.bytes-avro.topic"
+  },
+  "headers": {
+    "vtype": "bytes-avro",
+    "iteration": "2"
+  },
+  "keys": {
+    "Timestamp": 100002,
+    "IterationKey": "2"
+  },
+  "department": "0193",
+  "id": "41417891001",
+  "external_identifier": null,
+  "external_id_type": "1"
+}
+```
+
+A sample KQL statement can be as follows
+
+```kql
+.create-merge table ['KustoTable'] (
+  ['headers']:dynamic, 
+  ['kafkamd']:dynamic,
+  ['keys']:dynamic,
+  ['department']:string,
+  ['id']:string,
+  ['external_identifier']:string,
+  ['external_id_type']:string
+  )
+```
+
+The corresponding mapping can be
+```kql
+.create table ['KustoTable'] ingestion json mapping 'KustoTable_mapping' '[
+{"column":"event_type", "Properties":{"Path":"$[\'event_type\']"}},
+......
+{"column":"keys", "Properties":{"Path":"$[\'keys\']"}},
+{"column":"headers", "Properties":{"Path":"$[\'headers\']"}},{
+"column":"kafkamd", "Properties":{"Path":"$[\'kafkamd\']"}}]'
+```
+
+## 3. Features supported
+
+
+### 3.1. Configurable behavior on errors
+
+- The connector supports configurable behavior in case of errors. The following are the possible values:
+  - Shut down the connector task upon encountering an error
+  - Log the error and continue processing
+  - Log the error, send record to dead letter queue, and continue processing
+
+
+### 3.2. Configurable retries
+
+- The connector supports retries for transient errors with the ability to provide relevant parameters
+- and retries with exponential backoff
 
 ### 3.3. Serialization formats
 
@@ -105,7 +240,7 @@ The following is complete set of connector sink properties -
 
 | #  | Property                                     | Purpose                                                                                       | Details                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 
 |:---|:---------------------------------------------|:----------------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1  | connector.class                              | ClassName of the Fabric (EventHouse) sink                                                     | Hard code to ```com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConnector```<br>*Required*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 1  | connector.class                              | ClassName of the Kusto sink                                                                   | Hard code to ```com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConnector```<br>*Required*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 2  | connection.string                            | Connection string                                                                             | Supports eventhouse [connection string](https://learn.microsoft.com/en-us/kusto/api/connection-strings/kusto?view=microsoft-fabric) <br>*Optional*. Either of connection string or  ingest url required                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | 3  | topics                                       | Kafka topic specification                                                                     | List of topics separated by commas<br>*Required*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | 4  | kusto.ingestion.url                          | EventHouse ingestion endpoint URL                                                             | Provide the ingest URL of your ADX cluster<br>Use the following construct for the private URL - https://ingest-private-[cluster].kusto.windows.net<br>*Optional*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
