@@ -31,6 +31,7 @@ import static com.microsoft.azure.kusto.ingest.IngestionProperties.DataFormat.*;
 
 public enum FormatWriterHelper {
     INSTANCE;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(FormatWriterHelper.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private static final JsonFactory JSON_FACTORY = new JsonFactory();
@@ -161,7 +162,7 @@ public enum FormatWriterHelper {
         }
     }
 
-    private boolean isJson(IngestionProperties.DataFormat dataFormat) {
+    public boolean isJson(IngestionProperties.DataFormat dataFormat) {
         return IngestionProperties.DataFormat.JSON.equals(dataFormat)
                 || IngestionProperties.DataFormat.MULTIJSON.equals(dataFormat)
                 || IngestionProperties.DataFormat.SINGLEJSON.equals(dataFormat);
@@ -170,15 +171,15 @@ public enum FormatWriterHelper {
     private @NotNull Collection<Map<String, Object>> bytesToAvroRecord(String defaultKeyOrValueField, byte[] receivedMessage) {
         Map<String, Object> returnValue = new HashMap<>();
         DatumReader<GenericRecord> datumReader = new GenericDatumReader<>();
-        try (DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(new SeekableByteArrayInput(receivedMessage), datumReader)){
+        try (DataFileReader<GenericRecord> dataFileReader = new DataFileReader<>(new SeekableByteArrayInput(receivedMessage), datumReader)) {
             // avro input parser
             List<Map<String, Object>> nodes = new ArrayList<>();
             while (dataFileReader.hasNext()) {
                 String jsonString = dataFileReader.next().toString();
                 LOGGER.trace("Encoding AVROBytes yielded {}", jsonString);
-                    Map<String, Object> nodeMap = OBJECT_MAPPER.readValue(jsonString, MAP_TYPE_REFERENCE);
-                    returnValue.putAll(nodeMap);
-                    nodes.add(returnValue);
+                Map<String, Object> nodeMap = OBJECT_MAPPER.readValue(jsonString, MAP_TYPE_REFERENCE);
+                returnValue.putAll(nodeMap);
+                nodes.add(returnValue);
             }
             return nodes;
         } catch (Exception e) {

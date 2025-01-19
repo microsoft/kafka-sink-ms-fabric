@@ -122,7 +122,7 @@ class FileWriterTest {
         final int MAX_FILE_SIZE = 225; // sizeof(,'','','{"partition":"1","offset":"1","topic":"topic"}'\n) * 2 , Similar multiple applied for the first test
         Consumer<SourceFile> trackFiles = (SourceFile f) -> files.put(f.path, f.rawBytes);
         Function<Long, String> generateFileName = (Long l) -> Paths.get(path, String.valueOf(java.util.UUID.randomUUID())) + "csv.gz";
-        EventHouseRecordWriter  eventHouseRecordWriter = new EventHouseRecordWriter(path, NullOutputStream.INSTANCE);
+        EventHouseRecordWriter eventHouseRecordWriter = new EventHouseRecordWriter(path, NullOutputStream.INSTANCE);
         try (FileWriter fileWriter = new FileWriter(path, MAX_FILE_SIZE, trackFiles, generateFileName, 30000,
                 new ReentrantReadWriteLock(),
                 ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true)) {
@@ -134,11 +134,11 @@ class FileWriterTest {
                 record1.headers().addString("projectHeader2", "projectHeaderValue2");
                 record1.headers().addString("dropHeader1", "someValue");
                 record1.headers().addString("dropHeader2", "someValue");
-                fileWriter.writeData(record1,getHeaderTransforms());
-                Map<String,Object> headerResult = eventHouseRecordWriter.getHeadersAsMap(record1, getHeaderTransforms());
-                Assertions.assertEquals(2,headerResult.size());
-                Assertions.assertEquals("projectHeaderValue1",headerResult.get("projectHeader1"));
-                Assertions.assertEquals("projectHeaderValue2",headerResult.get("projectHeader2"));
+                fileWriter.writeData(record1, getHeaderTransforms());
+                Map<String, Object> headerResult = eventHouseRecordWriter.getHeadersAsMap(record1, getHeaderTransforms());
+                Assertions.assertEquals(2, headerResult.size());
+                Assertions.assertEquals("projectHeaderValue1", headerResult.get("projectHeader1"));
+                Assertions.assertEquals("projectHeaderValue2", headerResult.get("projectHeader2"));
             }
             Assertions.assertEquals(4, files.size());
             // should still have 1 open file at this point...
@@ -170,7 +170,7 @@ class FileWriterTest {
                 ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true);
         String msg = "Message";
         SinkRecord sinkRecord = new SinkRecord("topic", 1, null, null, null, msg, 10);
-        fileWriter.writeData(sinkRecord,getHeaderTransforms());
+        fileWriter.writeData(sinkRecord, getHeaderTransforms());
         Awaitility.await().atMost(3, SECONDS).untilAsserted(() -> Assertions.assertEquals(0, files.size()));
         fileWriter.rotate(10L);
         fileWriter.stop();
@@ -184,7 +184,7 @@ class FileWriterTest {
                 ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true);
         String msg2 = "Second Message";
         SinkRecord record1 = new SinkRecord("topic", 1, null, null, null, msg2, 10);
-        fileWriter2.writeData(record1,getHeaderTransforms());
+        fileWriter2.writeData(record1, getHeaderTransforms());
         Awaitility.await().atMost(3, SECONDS).untilAsserted(() -> Assertions.assertEquals(2, files.size()));
         List<Long> sortedFiles = new ArrayList<>(files.values());
         sortedFiles.sort((Long x, Long y) -> (int) (y - x));
@@ -229,14 +229,14 @@ class FileWriterTest {
             reentrantReadWriteLock.readLock().lock();
             long recordOffset = 1;
             SinkRecord sinkRecord = new SinkRecord("topic", 1, null, null, Schema.BYTES_SCHEMA, msg2.getBytes(), recordOffset);
-            fileWriter2.writeData(sinkRecord,getHeaderTransforms());
+            fileWriter2.writeData(sinkRecord, getHeaderTransforms());
             offsets.currentOffset = recordOffset;
             // Wake the flush by interval in the middle of the writing
             Thread.sleep(510);
             recordOffset = 2;
             SinkRecord record2 = new SinkRecord("TestTopic", 1, null, null, Schema.BYTES_SCHEMA, msg2.getBytes(), recordOffset);
 
-            fileWriter2.writeData(record2,getHeaderTransforms());
+            fileWriter2.writeData(record2, getHeaderTransforms());
             offsets.currentOffset = recordOffset;
             reentrantReadWriteLock.readLock().unlock();
 
@@ -246,7 +246,7 @@ class FileWriterTest {
             SinkRecord record3 = new SinkRecord("TestTopic", 1, null, null, Schema.BYTES_SCHEMA, msg2.getBytes(), recordOffset);
 
             offsets.currentOffset = recordOffset;
-            fileWriter2.writeData(record3,getHeaderTransforms());
+            fileWriter2.writeData(record3, getHeaderTransforms());
             reentrantReadWriteLock.readLock().unlock();
             // Assertions
             Awaitility.await().atMost(3, SECONDS).untilAsserted(() -> Assertions.assertEquals(2, files.size()));

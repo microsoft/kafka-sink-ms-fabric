@@ -19,14 +19,19 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.connect.storage.StringConverter;
 import org.awaitility.Awaitility;
 import org.jetbrains.annotations.NotNull;
 import org.json.JSONException;
@@ -34,6 +39,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.skyscreamer.jsonassert.Customization;
@@ -71,7 +78,7 @@ import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 
 import static com.microsoft.fabric.connect.eventhouse.sink.it.ITSetup.getConnectorProperties;
-import static java.time.temporal.ChronoUnit.SECONDS;
+import static java.time.temporal.ChronoUnit.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.skyscreamer.jsonassert.JSONCompareMode.LENIENT;
 
@@ -82,20 +89,19 @@ class EventHouseSinkIT {
     private static final Integer KAFKA_MAX_MSG_SIZE = 3 * 1024 * 1024;
     private static final String CONFLUENT_VERSION = "7.5.6";
     private static final String KAFKA_LISTENER = "kafka:19092";
-    private static final ConfluentKafkaContainer kafkaContainer =
-            new ConfluentKafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:" + CONFLUENT_VERSION))
+    private static final ConfluentKafkaContainer kafkaContainer = new ConfluentKafkaContainer(
+            DockerImageName.parse("confluentinc/cp-kafka:" + CONFLUENT_VERSION))
                     .withListener(KAFKA_LISTENER).withReuse(true).withNetwork(network)
-            .withEnv("KAFKA_MESSAGE_MAX_BYTES", KAFKA_MAX_MSG_SIZE.toString())
-            .withEnv("KAFKA_SOCKET_REQUEST_MAX_BYTES", KAFKA_MAX_MSG_SIZE.toString());
-    private static final SchemaRegistryContainer schemaRegistryContainer =
-            new SchemaRegistryContainer(CONFLUENT_VERSION,KAFKA_LISTENER).withNetwork(network).dependsOn(kafkaContainer);
+                    .withEnv("KAFKA_MESSAGE_MAX_BYTES", KAFKA_MAX_MSG_SIZE.toString())
+                    .withEnv("KAFKA_SOCKET_REQUEST_MAX_BYTES", KAFKA_MAX_MSG_SIZE.toString());
+    private static final SchemaRegistryContainer schemaRegistryContainer = new SchemaRegistryContainer(CONFLUENT_VERSION, KAFKA_LISTENER).withNetwork(network)
+            .dependsOn(kafkaContainer);
     private static final ProxyContainer proxyContainer = new ProxyContainer().withNetwork(network);
-    private static final EventHouseKafkaConnectContainer connectContainer =
-            new EventHouseKafkaConnectContainer(CONFLUENT_VERSION,KAFKA_LISTENER).withKafka(kafkaContainer)
+    private static final EventHouseKafkaConnectContainer connectContainer = new EventHouseKafkaConnectContainer(CONFLUENT_VERSION, KAFKA_LISTENER)
+            .withKafka(kafkaContainer)
             .withNetwork(network).dependsOn(kafkaContainer, proxyContainer, schemaRegistryContainer);
     private static final String KEY_COLUMN = "vlong";
-    private static final String COMPLEX_AVRO_BYTES_TABLE_TEST =
-            String.format("ComplexAvroBytesTest_%s", UUID.randomUUID()).replace('-', '_');
+    private static final String COMPLEX_AVRO_BYTES_TABLE_TEST = String.format("ComplexAvroBytesTest_%s", UUID.randomUUID()).replace('-', '_');
     private static ITCoordinates coordinates;
     private static Client engineClient = null;
     private static Client dmClient = null;
@@ -115,15 +121,15 @@ class EventHouseSinkIT {
             refreshDm();
             // Mount the libs
             String mountPath = String.format(
-                    "target/kafka-sink-ms-fabric-%s-jar-with-dependencies.jar",Version.getConnectorVersion());
+                    "target/kafka-sink-ms-fabric-%s-jar-with-dependencies.jar", Version.getConnectorVersion());
             LOGGER.info("Creating connector jar with version {} and mounting it from {}", Version.getConnectorVersion(), mountPath);
             Transferable source = MountableFile.forHostPath(mountPath);
             connectContainer.withCopyToContainer(source, Utils.getConnectPath());
             Startables.deepStart(Stream.of(kafkaContainer, schemaRegistryContainer, proxyContainer, connectContainer)).join();
             LOGGER.info("Started containers , copying scripts to container and executing them");
             connectContainer.withCopyToContainer(MountableFile.forClasspathResource("download-libs.sh", 744), // rwx--r--r--
-                    String.format("%s/download-libs.sh",Utils.getConnectPath()))
-                    .execInContainer("sh",  String.format("%s/download-libs.sh",Utils.getConnectPath()));
+                    String.format("%s/download-libs.sh", Utils.getConnectPath()))
+                    .execInContainer("sh", String.format("%s/download-libs.sh", Utils.getConnectPath()));
             // Logs of start up of the container gets published here. This will be handy in case we want to look at startup failures
             LOGGER.debug(connectContainer.getLogs());
         } else {
@@ -140,7 +146,7 @@ class EventHouseSinkIT {
                 .collect(Collectors.toList());
         kqlsToExecute.forEach(kql -> {
             try {
-                engineClient.execute(coordinates.database, kql);
+                engineClient.executeMgmt(coordinates.database, kql);
             } catch (Exception e) {
                 LOGGER.error("Failed to execute kql: {}", kql, e);
             }
@@ -157,7 +163,7 @@ class EventHouseSinkIT {
                 .collect(Collectors.toList());
         kqlsToExecute.forEach(kql -> {
             try {
-                dmClient.execute(kql);
+                dmClient.executeMgmt(kql);
             } catch (Exception e) {
                 LOGGER.error("Failed to execute DM kql: {}", kql, e);
             }
@@ -167,24 +173,22 @@ class EventHouseSinkIT {
 
     @AfterAll
     public static void stopContainers() throws Exception {
+        engineClient.executeMgmt(coordinates.database, String.format(".drop table %s", coordinates.table));
+        engineClient.executeMgmt(coordinates.database, String.format(".drop table %s", COMPLEX_AVRO_BYTES_TABLE_TEST));
         LOGGER.info("Finished table clean up. Dropped tables {} and {}", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
         connectContainer.stop();
         schemaRegistryContainer.stop();
         kafkaContainer.stop();
-        engineClient.execute(coordinates.database, String.format(".drop table %s", coordinates.table));
-        engineClient.execute(coordinates.database, String.format(".drop table %s", COMPLEX_AVRO_BYTES_TABLE_TEST));
-        dmClient.close();
-        engineClient.close();
     }
 
     private static void deployConnector(@NotNull String dataFormat, String topicTableMapping,
-                                        String srUrl, String keyFormat, String valueFormat) {
+            String srUrl, String keyFormat, String valueFormat) {
         deployConnector(dataFormat, topicTableMapping, srUrl, keyFormat, valueFormat, Collections.emptyMap());
     }
 
     private static void deployConnector(@NotNull String dataFormat, String topicTableMapping,
-                                        String srUrl, String keyFormat, String valueFormat,
-                                        Map<String, Object> overrideProps) {
+            String srUrl, String keyFormat, String valueFormat,
+            Map<String, Object> overrideProps) {
         Map<String, Object> connectorProps = new HashMap<>();
         connectorProps.put("connector.class", "com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConnector");
         connectorProps.put("flush.size.bytes", 10000);
@@ -206,14 +210,17 @@ class EventHouseSinkIT {
         connectorProps.put("proxy.host", proxyContainer.getContainerId().substring(0, 12));
         connectorProps.put("proxy.port", proxyContainer.getExposedPorts().get(0));
         connectorProps.putAll(overrideProps);
-        connectContainer.registerConnector(String.format("adx-connector-%s", dataFormat), connectorProps);
+        String connectorName = overrideProps.getOrDefault("connector.name",
+                String.format("adx-connector-%s", dataFormat)).toString();
+        connectContainer.registerConnector(connectorName, connectorProps);
         LOGGER.debug("Deployed connector for {}", dataFormat);
         LOGGER.debug(connectContainer.getLogs());
-        connectContainer.waitUntilConnectorTaskStateChanges(String.format("adx-connector-%s", dataFormat), 0, "RUNNING");
+        connectContainer.waitUntilConnectorTaskStateChanges(connectorName, 0, "RUNNING");
         LOGGER.info("Connector state for {} : {}. ", dataFormat,
-                connectContainer.getConnectorTaskState(String.format("adx-connector-%s", dataFormat), 0));
+                connectContainer.getConnectorTaskState(connectorName, 0));
     }
 
+    @Execution(ExecutionMode.CONCURRENT)
     @ParameterizedTest(name = "Test for data format {0}")
     @CsvSource({"json", "avro", "csv", "bytes-json"})
     void shouldHandleAllTypesOfEvents(@NotNull String dataFormat) {
@@ -228,15 +235,15 @@ class EventHouseSinkIT {
         }
         String topicTableMapping = dataFormat.equals("csv")
                 ? String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'csv_mapping','streaming':'true'}]",
-                dataFormat, coordinates.database, coordinates.table, dataFormat)
+                        dataFormat, coordinates.database, coordinates.table, dataFormat)
                 : String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'data_mapping'}]", dataFormat,
-                coordinates.database,
-                coordinates.table, dataFormat);
+                        coordinates.database,
+                        coordinates.table, dataFormat);
         if (dataFormat.startsWith("bytes")) {
             valueFormat = "org.apache.kafka.connect.converters.ByteArrayConverter";
             // JSON is written as JSON
             topicTableMapping = String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s'," +
-                            "'mapping':'data_mapping'}]", dataFormat,
+                    "'mapping':'data_mapping'}]", dataFormat,
                     coordinates.database,
                     coordinates.table, dataFormat.split("-")[1]);
         }
@@ -245,10 +252,10 @@ class EventHouseSinkIT {
         deployConnector(dataFormat, topicTableMapping, srUrl, keyFormat, valueFormat);
         try {
             int maxRecords = 10;
-            Map<Long, String> expectedRecordsProduced = produceKafkaMessages(dataFormat, maxRecords);
-            if(expectedRecordsProduced.isEmpty()){
+            Map<Long, String> expectedRecordsProduced = produceKafkaMessages(dataFormat, maxRecords, "");
+            if (expectedRecordsProduced.isEmpty()) {
                 performTombstoneAssertions();
-            }else {
+            } else {
                 performDataAssertions(dataFormat, maxRecords, expectedRecordsProduced);
             }
         } catch (IOException e) {
@@ -256,8 +263,8 @@ class EventHouseSinkIT {
         }
     }
 
-    private @NotNull Map<Long, String> produceKafkaMessages(@NotNull String dataFormat, int maxRecords) throws IOException {
-        LOGGER.info("Producing messages");
+    private @NotNull Map<Long, String> produceKafkaMessages(@NotNull String dataFormat, int maxRecords, String targetTopicName) throws IOException {
+        LOGGER.warn("Producing messages");
         Map<String, Object> producerProperties = new HashMap<>();
         producerProperties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
         // avro
@@ -280,7 +287,8 @@ class EventHouseSinkIT {
                         genericRecord.put("vtype", dataFormat);
                         List<Header> headers = new ArrayList<>();
                         headers.add(new RecordHeader("Iteration", (dataFormat + "-Header" + i).getBytes()));
-                        ProducerRecord<String, GenericData.Record> producerRecord = new ProducerRecord<>("e2e.avro.topic", 0, "Key-" + i, genericRecord, headers);
+                        String targetTopic = StringUtils.defaultIfBlank(targetTopicName, String.format("e2e.%s.topic", dataFormat));
+                        ProducerRecord<String, GenericData.Record> producerRecord = new ProducerRecord<>(targetTopic, 0, "Key-" + i, genericRecord, headers);
                         Map<String, Object> jsonRecordMap = genericRecord.getSchema().getFields().stream()
                                 .collect(Collectors.toMap(Schema.Field::name, field -> genericRecord.get(field.name())));
                         jsonRecordMap.put("vtype", "avro");
@@ -305,7 +313,8 @@ class EventHouseSinkIT {
                                 .collect(Collectors.toMap(Schema.Field::name, field -> genericRecord.get(field.name())));
                         List<Header> headers = new ArrayList<>();
                         headers.add(new RecordHeader("Iteration", (dataFormat + "-Header" + i).getBytes()));
-                        ProducerRecord<String, String> producerRecord = new ProducerRecord<>("e2e.json.topic",
+                        String targetTopic = StringUtils.defaultIfBlank(targetTopicName, String.format("e2e.%s.topic", dataFormat));
+                        ProducerRecord<String, String> producerRecord = new ProducerRecord<>(targetTopic,
                                 0, "Key-" + i, OBJECT_MAPPER.writeValueAsString(jsonRecordMap), headers);
                         jsonRecordMap.put("vtype", dataFormat);
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(KEY_COLUMN).toString()),
@@ -335,7 +344,8 @@ class EventHouseSinkIT {
                         LOGGER.debug("CSV Record produced: {}", objectsCommaSeparated);
                         List<Header> headers = new ArrayList<>();
                         headers.add(new RecordHeader("Iteration", (dataFormat + "-Header" + i).getBytes()));
-                        ProducerRecord<String, String> producerRecord = new ProducerRecord<>("e2e.csv.topic", 0, "Key-" + i,
+                        String targetTopic = StringUtils.defaultIfBlank(targetTopicName, String.format("e2e.%s.topic", dataFormat));
+                        ProducerRecord<String, String> producerRecord = new ProducerRecord<>(targetTopic, 0, "Key-" + i,
                                 objectsCommaSeparated, headers);
                         jsonRecordMap.put("vtype", dataFormat);
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(KEY_COLUMN).toString()),
@@ -356,18 +366,18 @@ class EventHouseSinkIT {
                         byte[] dataToSend = genericRecord.toString().getBytes(StandardCharsets.UTF_8);
                         Map<String, Object> jsonRecordMap = genericRecord.getSchema().getFields().stream()
                                 .collect(Collectors.toMap(Schema.Field::name, field -> genericRecord.get(field.name())));
+                        String targetTopic = StringUtils.defaultIfBlank(targetTopicName, String.format("e2e.%s.topic", dataFormat));
                         ProducerRecord<String, byte[]> producerRecord = new ProducerRecord<>(
-                                String.format("e2e.%s.topic", dataFormat),
+                                targetTopic,
                                 String.format("Key-%s", i),
                                 dataToSend);
                         jsonRecordMap.put("vtype", dataFormat);
                         expectedRecordsProduced.put(Long.valueOf(jsonRecordMap.get(KEY_COLUMN).toString()),
                                 OBJECT_MAPPER.writeValueAsString(jsonRecordMap));
-                        LOGGER.info("Bytes topic {} written to", String.format("e2e.%s.topic", dataFormat));
+                        LOGGER.info("Bytes topic {} written to", targetTopic);
                         try {
                             RecordMetadata rmd = producer.send(producerRecord).get();
-                            LOGGER.info("Record sent to topic {} with offset {} of size {}",
-                                    String.format("e2e.%s.topic", dataFormat), rmd.offset(), dataToSend.length);
+                            LOGGER.info("Record sent to topic {} with offset {} of size {}", targetTopic, rmd.offset(), dataToSend.length);
                         } catch (Exception e) {
                             LOGGER.error("Failed to send genericRecord to topic {}", String.format("e2e.%s.topic", dataFormat), e);
                         }
@@ -394,9 +404,9 @@ class EventHouseSinkIT {
                         new CustomComparator(LENIENT,
                                 // there are sometimes round off errors in the double values but they are close enough to 8 precision
                                 new Customization("vdec", (vdec1,
-                                                           vdec2) -> Math.abs(Double.parseDouble(vdec1.toString()) - Double.parseDouble(vdec2.toString())) < 0.000000001),
+                                        vdec2) -> Math.abs(Double.parseDouble(vdec1.toString()) - Double.parseDouble(vdec2.toString())) < 0.000000001),
                                 new Customization("vreal", (vreal1,
-                                                            vreal2) -> Math.abs(Double.parseDouble(vreal1.toString()) - Double.parseDouble(vreal2.toString())) < 0.0001)));
+                                        vreal2) -> Math.abs(Double.parseDouble(vreal1.toString()) - Double.parseDouble(vreal2.toString())) < 0.0001)));
             } catch (JSONException e) {
                 fail(e);
             }
@@ -406,19 +416,18 @@ class EventHouseSinkIT {
     private static void performTombstoneAssertions() {
         try {
             String tsQuery = String.format("%s | where keys startswith 'TSKey'|project vresult = pack_all()", coordinates.table);
-            KustoResultSetTable tsResultSet = engineClient.execute(coordinates.database, tsQuery).getPrimaryResults();
-            TypeReference<Map<String,Object>> mapResultRef
-                    = new TypeReference<Map<String,Object>>() {};
-            while(tsResultSet.next()) {
+            KustoResultSetTable tsResultSet = engineClient.executeQuery(coordinates.database, tsQuery).getPrimaryResults();
+            TypeReference<Map<String, Object>> mapResultRef = new TypeReference<Map<String, Object>>() {};
+            while (tsResultSet.next()) {
                 String nullRecords = tsResultSet.getString("vresult");
-                Map<String,Object> parsedResult = OBJECT_MAPPER.readValue(nullRecords,mapResultRef);
-                parsedResult.forEach((key,value) -> {
-                        if(key.startsWith("v")) {
-                            assertTrue(StringUtils.isEmpty(value.toString()), "Field " + key + " " +
-                                    "should be null/empty but is " + value);
-                        } else {
-                            assertNotNull(value, "Field " + key + " is null");
-                        }
+                Map<String, Object> parsedResult = OBJECT_MAPPER.readValue(nullRecords, mapResultRef);
+                parsedResult.forEach((key, value) -> {
+                    if (key.startsWith("v")) {
+                        assertTrue(StringUtils.isEmpty(value.toString()), "Field " + key + " " +
+                                "should be null/empty but is " + value);
+                    } else {
+                        assertNotNull(value, "Field " + key + " is null");
+                    }
                 });
             }
         } catch (Exception e) {
@@ -426,6 +435,7 @@ class EventHouseSinkIT {
         }
     }
 
+    @Execution(ExecutionMode.CONCURRENT)
     @Test
     void shouldHandleComplexAvroMessage() throws IOException {
         String dataFormat = "bytes-avro";
@@ -443,7 +453,7 @@ class EventHouseSinkIT {
         producerProperties.put("message.max.bytes", KAFKA_MAX_MSG_SIZE);
         String topicName = String.format("e2e.%s.topic", dataFormat);
         String topicTableMapping = String.format("[{'topic': '%s','db': '%s', " +
-                        "'table': '%s','format':'%s','mapping':'%s_mapping'}]", topicName,
+                "'table': '%s','format':'%s','mapping':'%s_mapping'}]", topicName,
                 coordinates.database,
                 COMPLEX_AVRO_BYTES_TABLE_TEST, dataFormat.split("-")[1], COMPLEX_AVRO_BYTES_TABLE_TEST);
         deployConnector(dataFormat, topicTableMapping, srUrl,
@@ -471,12 +481,13 @@ class EventHouseSinkIT {
                 keyRecord.put("IterationKey", String.valueOf(i));
                 keyRecord.put("Timestamp", keyTick);
                 InputStream avroData = Objects
-                        .requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-complex-data/complex-avro-%d.avro", i)));
+                        .requireNonNull(this.getClass().getClassLoader().getResourceAsStream(
+                                String.format("avro-complex-data/complex-avro-%d.avro", i)));
                 byte[] testData = IOUtils.toByteArray(avroData);
                 ProducerRecord<GenericData.Record, byte[]> producerRecord = new ProducerRecord<>(topicName, keyRecord, testData);
                 producerRecord.headers().add("vtype", dataFormat.getBytes());
                 producerRecord.headers().add("iteration", String.valueOf(i).getBytes());
-                RecordMetadata rmd  = producer.send(producerRecord).get();
+                RecordMetadata rmd = producer.send(producerRecord).get();
                 LOGGER.info("Avro bytes sent to topic {} with offset {} of size {}", topicName, rmd.offset(), testData.length);
             }
         } catch (Exception e) {
@@ -486,20 +497,20 @@ class EventHouseSinkIT {
         String countLongQuery = String.format("%s | summarize c = count() by event_id | project %s=event_id, " +
                 "vresult = bag_pack('event_id',event_id,'count',c)", COMPLEX_AVRO_BYTES_TABLE_TEST, KEY_COLUMN);
         Map<Object, String> actualRecordsIngested = getRecordsIngested(countLongQuery, maxRecords);
-        Awaitility.await().atMost(Duration.of(30, SECONDS)).untilAsserted(() -> assertEquals(maxRecords, actualRecordsIngested.size()));
+        Awaitility.await().atMost(Duration.of(1, MINUTES)).
+                untilAsserted(() -> assertEquals(maxRecords, actualRecordsIngested.size()));
         assertEquals(expectedResultMap, actualRecordsIngested);
     }
 
     /**
      * Polls the EventHouse table for the records ingested. The query is executed every 30 seconds and the results are
-     *
      * @param query      The query to execute
      * @param maxRecords The maximum number of records to poll for
      * @return A map of the records ingested
      */
     private @NotNull Map<Object, String> getRecordsIngested(String query, int maxRecords) {
         Predicate<Object> predicate = results -> {
-            if (results != null) {
+            if (results != null && ((Map<?, ?>) results).size()>0) {
                 LOGGER.info("Retrieved records count {}", ((Map<?, ?>) results).size());
             }
             return results == null || ((Map<?, ?>) results).isEmpty() || ((Map<?, ?>) results).size() < maxRecords;
@@ -515,7 +526,7 @@ class EventHouseSinkIT {
         Supplier<Map<Object, String>> recordSearchSupplier = () -> {
             try {
                 LOGGER.debug("Executing query {} ", query);
-                KustoResultSetTable resultSet = engineClient.execute(coordinates.database, query).getPrimaryResults();
+                KustoResultSetTable resultSet = engineClient.executeQuery(coordinates.database, query).getPrimaryResults();
                 Map<Object, String> actualResults = new HashMap<>();
                 while (resultSet.next()) {
                     Object keyObject = resultSet.getObject(KEY_COLUMN);
@@ -530,5 +541,74 @@ class EventHouseSinkIT {
             }
         };
         return retry.executeSupplier(recordSearchSupplier);
+    }
+
+    @Execution(ExecutionMode.CONCURRENT)
+    @ParameterizedTest(name = "Test DLQ tests for data format {0}")
+    @CsvSource({"avro"})
+    void testWritesToDlq(String dataFormat) throws IOException {
+        // The goal is to check writes to DLQ for different message formats and not really how it is triggered which
+        // are mostly runtime faults
+        String srUrl = String.format("http://%s:%s", schemaRegistryContainer.getContainerId().substring(0, 12), 8081);
+        String topicTableMapping = String.format("[{'topic': 'e2e.%s-err.topic','db': '%s', 'table': '%s','format':'%s'," +
+                "'mapping':'data_mapping'}]", dataFormat,
+                coordinates.database,
+                coordinates.table, dataFormat);
+        String valueFormat = StringConverter.class.getName();
+        String keyFormat = StringConverter.class.getName();
+        if (dataFormat.equals("avro")) {
+            keyFormat = StringConverter.class.getName();
+            valueFormat = AvroConverter.class.getName();
+        }
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put("behavior.on.error", "log");
+        overrides.put("misc.deadletterqueue.bootstrap.servers", kafkaContainer.getEnvMap().get("KAFKA_LISTENERS"));
+        String dlqTopicName = String.format("e2e.tests.%s.dlq.topic",dataFormat);
+        overrides.put("misc.deadletterqueue.topic.name", dlqTopicName);
+        overrides.put("proxy.host", proxyContainer.getContainerId().substring(0, 12));
+        overrides.put("proxy.port", proxyContainer.getExposedPorts().get(0));
+        overrides.put("connector.name", String.format("dlq-connector-%s", dataFormat));
+        overrides.put("schema.registry.url", srUrl);
+        overrides.put("value.converter.schema.registry.url", srUrl);
+        overrides.put("key.converter.schema.registry.url", srUrl);
+        String targetTopic = String.format("e2e.%s-err.topic", dataFormat);
+        overrides.put("topics", targetTopic);
+        overrides.put("kusto.ingestion.url", coordinates.ingestCluster + ".xxx");
+        deployConnector(dataFormat, topicTableMapping, srUrl,
+                keyFormat,
+                valueFormat,
+                overrides);
+        produceKafkaMessages(dataFormat, 100, targetTopic);
+        Collection<ConsumerRecord<byte[], byte[]>> dlqConsumerRecords = new ArrayList<>();
+        try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(getProperties(dataFormat))) {
+            consumer.subscribe(Collections.singletonList(dlqTopicName));
+            Awaitility.await().atMost(Duration.of(2, MINUTES)).until(() -> {
+                ConsumerRecords<byte[], byte[]> records = pollMessages(consumer);
+                records.forEach(dlqConsumerRecords::add);
+                return dlqConsumerRecords.size() == 100;
+            });
+        }
+        assertEquals(100, dlqConsumerRecords.size());
+        dlqConsumerRecords.forEach(consumerRecord -> {
+            assertNotNull(consumerRecord.headers().lastHeader("kafka_offset"));
+            assertNotNull(consumerRecord.headers().lastHeader("kafka_partition"));
+            assertNotNull(consumerRecord.headers().lastHeader("kafka_topic"));
+        });
+    }
+
+    private static ConsumerRecords<byte[], byte[]> pollMessages(@NotNull KafkaConsumer<byte[], byte[]> consumer) {
+        return consumer.poll(Duration.of(1000, MILLIS)); // Poll for up to 1000ms
+    }
+
+    private static @NotNull Properties getProperties(@NotNull String dataFormat) {
+        String keyDeserializer = ByteArrayDeserializer.class.getName();
+        String valueDeserializer = ByteArrayDeserializer.class.getName();
+        Properties consumerProperties = new Properties();
+        consumerProperties.put("bootstrap.servers", kafkaContainer.getBootstrapServers());
+        consumerProperties.put("group.id", "dlq-consumer");
+        consumerProperties.put("key.deserializer", keyDeserializer);
+        consumerProperties.put("value.deserializer", valueDeserializer);
+        consumerProperties.put("auto.offset.reset", "earliest");
+        return consumerProperties;
     }
 }

@@ -46,8 +46,6 @@ public class FabricSinkConfig extends AbstractConfig {
     static final String HEADERS_TO_PROJECT = "headers.to.project";
     static final String HEADERS_TO_DROP = "headers.to.drop";
 
-
-
     private static final String CONNECTION_STRING_DOC = "Connection string for the sink. Can be an " +
             "EventStream connection string or a Kusto connection string.";
     private static final String KUSTO_INGEST_URL_DOC = "Kusto ingestion endpoint URL.";
@@ -122,7 +120,6 @@ public class FabricSinkConfig extends AbstractConfig {
     private static final String HEADERS_TO_DROP_DOC = "Headers to drop";
     private static final String HEADERS_TO_DROP_DISPLAY = "Headers to be dropped";
 
-
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
 
     public FabricSinkConfig(ConfigDef config, Map<String, String> parsedConfig) {
@@ -187,7 +184,7 @@ public class FabricSinkConfig extends AbstractConfig {
                 .define(
                         KUSTO_SINK_MAX_RETRY_TIME_MS_CONF,
                         Type.LONG,
-                        TimeUnit.SECONDS.toMillis(300),
+                        TimeUnit.SECONDS.toMillis(10),
                         Importance.LOW,
                         KUSTO_SINK_MAX_RETRY_TIME_MS_DOC,
                         errorAndRetriesGroupName,
@@ -197,7 +194,7 @@ public class FabricSinkConfig extends AbstractConfig {
                 .define(
                         KUSTO_SINK_RETRY_BACKOFF_TIME_MS_CONF,
                         Type.LONG,
-                        TimeUnit.SECONDS.toMillis(10),
+                        TimeUnit.SECONDS.toMillis(2),
                         ConfigDef.Range.atLeast(1),
                         Importance.LOW,
                         KUSTO_SINK_RETRY_BACKOFF_TIME_MS_DOC,
@@ -404,36 +401,36 @@ public class FabricSinkConfig extends AbstractConfig {
     public String getConnectionString() {
         return this.getString(CONNECTION_STRING);
     }
+
     public FabricTarget getFabricTarget() {
-        if(StringUtils.isNotEmpty(getConnectionString())){
-            if(getConnectionString().startsWith("sb://")) {
+        if (StringUtils.isNotEmpty(getConnectionString())) {
+            if (getConnectionString().startsWith("sb://")) {
                 return FabricTarget.EVENTSTREAM;
             }
             return FabricTarget.EVENTHOUSE;
         }
-        if(StringUtils.isNotEmpty(getKustoIngestUrl())){
+        if (StringUtils.isNotEmpty(getKustoIngestUrl())) {
             return FabricTarget.EVENTHOUSE;
         }
         throw new ConfigException("Either Kusto Ingestion URL or Connection String must be provided.");
     }
 
-
     public String getKustoIngestUrl() {
         String ingestionUrl = this.getString(KUSTO_INGEST_URL_CONF);
-        if(StringUtils.isNotEmpty(ingestionUrl)) {
+        if (StringUtils.isNotEmpty(ingestionUrl)) {
             return ingestionUrl;
         }
         return getUrlFromConnectionString(false);
     }
 
-    private String getUrlFromConnectionString(boolean isEngineUrl){
+    private String getUrlFromConnectionString(boolean isEngineUrl) {
         String connectionString = this.getConnectionString();
-        if(StringUtils.isEmpty(connectionString)) {
+        if (StringUtils.isEmpty(connectionString)) {
             throw new ConfigException("Either Kusto Ingestion URL or Connection String must be provided.");
         } else {
             ConnectionStringBuilder kustoConnectionStringBuilder = new ConnectionStringBuilder(connectionString);
             String engineUrl = kustoConnectionStringBuilder.getClusterUrl();
-            if(isEngineUrl) {
+            if (isEngineUrl) {
                 return engineUrl;
             } else {
                 return engineUrl.replace("https://", "https://ingest-");
@@ -441,17 +438,17 @@ public class FabricSinkConfig extends AbstractConfig {
         }
     }
 
-    public void validateConfig(){
-        if(getFabricTarget() == FabricTarget.EVENTHOUSE
+    public void validateConfig() {
+        if (getFabricTarget() == FabricTarget.EVENTHOUSE
                 && StringUtils.isEmpty(getKustoIngestUrl())
-                && StringUtils.isEmpty(getConnectionString())){
+                && StringUtils.isEmpty(getConnectionString())) {
             throw new ConfigException("One of kusto.ingestion.url or connection.string must be provided.");
         }
     }
 
     public String getKustoEngineUrl() {
         String clusterUrl = this.getString(KUSTO_ENGINE_URL_CONF);
-        if(StringUtils.isNotEmpty(clusterUrl)) {
+        if (StringUtils.isNotEmpty(clusterUrl)) {
             return clusterUrl;
         }
         return getUrlFromConnectionString(true);
@@ -494,11 +491,9 @@ public class FabricSinkConfig extends AbstractConfig {
         CollectionType resultType = TypeFactory.defaultInstance().constructCollectionType(Set.class, String.class);
         String headersToProjectStr = getString(HEADERS_TO_PROJECT);
         String headersToDropStr = getString(HEADERS_TO_DROP);
-        Set<String> headersToProject =
-                StringUtils.isNotEmpty(headersToProjectStr) ?
-                        OBJECT_MAPPER.readValue(headersToProjectStr, resultType):Collections.emptySet();
-        Set<String> headersToDrop = StringUtils.isNotEmpty(headersToDropStr) ?
-                OBJECT_MAPPER.readValue(headersToDropStr, resultType):Collections.emptySet();
+        Set<String> headersToProject = StringUtils.isNotEmpty(headersToProjectStr) ? OBJECT_MAPPER.readValue(headersToProjectStr, resultType)
+                : Collections.emptySet();
+        Set<String> headersToDrop = StringUtils.isNotEmpty(headersToDropStr) ? OBJECT_MAPPER.readValue(headersToDropStr, resultType) : Collections.emptySet();
         return new HeaderTransforms(headersToDrop, headersToProject);
     }
 
@@ -547,18 +542,18 @@ public class FabricSinkConfig extends AbstractConfig {
     }
 
     public Properties getDlqProps() {
-        Map<String, Object> dlqconfigs = originalsWithPrefix(DLQ_PROPS_PREFIX);
+        Map<String, Object> dlqConfigs = originalsWithPrefix(DLQ_PROPS_PREFIX);
         Properties props = new Properties();
-        props.putAll(dlqconfigs);
+        props.putAll(dlqConfigs);
         props.put("bootstrap.servers", getDlqBootstrapServers());
         props.put("key.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
         props.put("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
         return props;
     }
 
-    public long getMaxRetryAttempts() {
-        return this.getLong(KUSTO_SINK_MAX_RETRY_TIME_MS_CONF)
-                / this.getLong(KUSTO_SINK_RETRY_BACKOFF_TIME_MS_CONF);
+    public int getMaxRetryAttempts() {
+        return (int) (this.getLong(KUSTO_SINK_MAX_RETRY_TIME_MS_CONF)
+                / this.getLong(KUSTO_SINK_RETRY_BACKOFF_TIME_MS_CONF));
     }
 
     public long getRetryBackOffTimeMs() {

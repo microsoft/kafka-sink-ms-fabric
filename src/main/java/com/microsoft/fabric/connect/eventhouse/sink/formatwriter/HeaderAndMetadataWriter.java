@@ -60,7 +60,6 @@ public abstract class HeaderAndMetadataWriter {
         return headersToProject != null && !headersToProject.isEmpty() && headersToProject.contains(headerKey);
     }
 
-
     /**
      * Convert SinkRecord to CSV
      *
@@ -70,7 +69,7 @@ public abstract class HeaderAndMetadataWriter {
      */
     public String convertSinkRecordToCsv(@NotNull SinkRecord sinkRecord, boolean isKey) {
         Object value = isKey ? sinkRecord.key() : sinkRecord.value();
-        if(value instanceof byte[]) {
+        if (value instanceof byte[]) {
             return new String((byte[]) value, StandardCharsets.UTF_8);
         } else {
             return value == null ? "" : value.toString();
@@ -84,12 +83,11 @@ public abstract class HeaderAndMetadataWriter {
         Object recordValue;
         Schema schema;
         String defaultKeyOrValueField;
-        if(isKey){
+        if (isKey) {
             recordValue = sinkRecord.key();
             schema = sinkRecord.keySchema();
             defaultKeyOrValueField = KEY_FIELD;
-        }
-        else {
+        } else {
             recordValue = sinkRecord.value();
             schema = sinkRecord.valueSchema();
             defaultKeyOrValueField = VALUE_FIELD;

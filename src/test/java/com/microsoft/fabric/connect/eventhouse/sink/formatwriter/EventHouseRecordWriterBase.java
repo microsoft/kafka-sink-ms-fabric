@@ -27,13 +27,14 @@ public abstract class EventHouseRecordWriterBase {
     protected static final String KEYS = "keys";
     protected static final String HEADERS = "headers";
     protected static final String KAFKA_MD = "kafkamd";
-    protected static final ObjectMapper RESULT_MAPPER = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS).enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
+    protected static final ObjectMapper RESULT_MAPPER = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
+            .enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
     protected static final TypeReference<Map<String, Object>> GENERIC_MAP = new TypeReference<Map<String, Object>>() {};
 
     public HeaderTransforms headerTransforms() throws JsonProcessingException {
         CollectionType resultType = TypeFactory.defaultInstance().constructCollectionType(Set.class, String.class);
-        String projectHeaders = "[" + IntStream.range(0,10)
-                .mapToObj(i -> new String[]{String.format("'HeaderInt-%d'", i),String.format("'HeaderBytes-%d'", i)})
+        String projectHeaders = "[" + IntStream.range(0, 10)
+                .mapToObj(i -> new String[] {String.format("'HeaderInt-%d'", i), String.format("'HeaderBytes-%d'", i)})
                 .flatMap(Arrays::stream)
                 .collect(Collectors.joining(", ")) + "]";
         String dropHeaders = "[" + IntStream.range(0, 10)

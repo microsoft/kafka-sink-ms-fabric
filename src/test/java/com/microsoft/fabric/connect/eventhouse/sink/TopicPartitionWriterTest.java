@@ -9,8 +9,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -46,8 +44,6 @@ public class TopicPartitionWriterTest {
     private File currentDirectory;
     private String basePathCurrent;
     private boolean isDlqEnabled;
-    private String dlqTopicName;
-    private Producer<byte[], byte[]> kafkaProducer;
 
     @BeforeAll
     public static void beforeClass() {
@@ -58,13 +54,7 @@ public class TopicPartitionWriterTest {
     @BeforeEach
     public final void before() {
         currentDirectory = Utils.getCurrentWorkingDirectory();
-        Properties properties = new Properties();
-        properties.put("bootstrap.servers", "localhost:9000");
-        properties.put("key.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
-        properties.put("value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer");
-        kafkaProducer = new KafkaProducer<>(properties);
         isDlqEnabled = false;
-        dlqTopicName = null;
         basePathCurrent = Paths.get(currentDirectory.getPath(), "testWriteStringyValuesAndOffset").toString();
         Map<String, String> settings = getKustoConfigs(basePathCurrent, FILE_THRESHOLD, FLUSH_INTERVAL);
         config = new FabricSinkConfig(settings);
@@ -76,11 +66,11 @@ public class TopicPartitionWriterTest {
     }
 
     @Test
-    void  testHandleRollFile() {
+    void testHandleRollFile() {
         IngestClient mockedClient = mock(IngestClient.class);
         TopicIngestionProperties props = new TopicIngestionProperties();
         props.ingestionProperties = new IngestionProperties(DATABASE, TABLE);
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, config, isDlqEnabled, dlqTopicName, kafkaProducer);
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
         SourceFile descriptor = new SourceFile();
         descriptor.rawBytes = 1024;
         writer.handleRollFile(descriptor);
@@ -92,7 +82,6 @@ public class TopicPartitionWriterTest {
             LOGGER.error("Error running testHandleRollFile", e);
             fail(e);
         }
-
         Assertions.assertEquals(fileSourceInfoArgument.getValue().getFilePath(), descriptor.path);
         Assertions.assertEquals(TABLE, ingestionPropertiesArgumentCaptor.getValue().getTableName());
         Assertions.assertEquals(DATABASE, ingestionPropertiesArgumentCaptor.getValue().getDatabaseName());
@@ -100,12 +89,12 @@ public class TopicPartitionWriterTest {
     }
 
     @Test
-    void  testHandleRollFileWithStreamingEnabled() {
+    void testHandleRollFileWithStreamingEnabled() {
         IngestClient mockedClient = mock(IngestClient.class);
         TopicIngestionProperties props = new TopicIngestionProperties();
         props.ingestionProperties = new IngestionProperties(DATABASE, TABLE);
         props.streaming = true;
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, config, isDlqEnabled, dlqTopicName, kafkaProducer);
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
 
         SourceFile descriptor = new SourceFile();
         descriptor.rawBytes = 1024;
@@ -127,9 +116,9 @@ public class TopicPartitionWriterTest {
     }
 
     @Test
-    void  testGetFilename() {
+    void testGetFilename() {
         try {
-            TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, dlqTopicName, kafkaProducer);
+            TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
             File writerFile = new File(writer.getFilePath(null));
             Assertions.assertEquals("kafka_testPartition_11_0.JSON.gz", writerFile.getName());
         } catch (Exception ex) {
@@ -150,14 +139,14 @@ public class TopicPartitionWriterTest {
     }
 
     @Test
-    void  testGetFilenameAfterOffsetChanges() {
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, dlqTopicName, kafkaProducer);
+    void testGetFilenameAfterOffsetChanges() {
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
         writer.open();
         List<SinkRecord> records = new ArrayList<>();
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "another,stringy,message", 5));
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "{'also':'stringy','sortof':'message'}", 4));
-        for (SinkRecord sinkRecord  : records) {
-            writer.writeRecord(sinkRecord,getHeaderTransforms());
+        for (SinkRecord sinkRecord : records) {
+            writer.writeRecord(sinkRecord, getHeaderTransforms());
         }
         try {
             File writerFile = new File(writer.getFilePath(null));
@@ -170,14 +159,14 @@ public class TopicPartitionWriterTest {
     }
 
     @Test
-    void  testWriteStringyValuesAndOffset() {
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, dlqTopicName, kafkaProducer);
+    void testWriteStringyValuesAndOffset() {
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
         writer.open();
         List<SinkRecord> records = new ArrayList<>();
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "another,stringy,message", 3));
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "{'also':'stringy','sortof':'message'}", 4));
         for (SinkRecord sinkRecord : records) {
-            writer.writeRecord(sinkRecord,getHeaderTransforms());
+            writer.writeRecord(sinkRecord, getHeaderTransforms());
         }
         Assertions.assertTrue((new File(writer.fileWriter.currentFile.path)).exists());
         Assertions.assertEquals(String.format("kafka_%s_%d_%d.%s.gz", tp.topic(), tp.partition(), 4,
@@ -187,7 +176,7 @@ public class TopicPartitionWriterTest {
     }
 
     @Test
-    void  testWriteBytesValuesAndOffset() throws IOException {
+    void testWriteBytesValuesAndOffset() throws IOException {
         byte[] message = IOUtils.toByteArray(
                 Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream("data.avro")));
         ByteArrayOutputStream o = new ByteArrayOutputStream();
@@ -199,14 +188,14 @@ public class TopicPartitionWriterTest {
         propsAvro.ingestionProperties.setDataFormat(IngestionProperties.DataFormat.AVRO);
         Map<String, String> settings2 = getKustoConfigs(basePathCurrent, fileThreshold2, FLUSH_INTERVAL);
         FabricSinkConfig config2 = new FabricSinkConfig(settings2);
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsAvro, config2, isDlqEnabled, dlqTopicName, kafkaProducer);
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsAvro, config2, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
 
         writer.open();
         List<SinkRecord> records = new ArrayList<>();
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.BYTES_SCHEMA, o.toByteArray(), 10));
 
         for (SinkRecord sinkRecord : records) {
-            writer.writeRecord(sinkRecord,getHeaderTransforms());
+            writer.writeRecord(sinkRecord, getHeaderTransforms());
         }
 
         Assertions.assertEquals(10, (long) writer.lastCommittedOffset);
@@ -222,24 +211,23 @@ public class TopicPartitionWriterTest {
     }
 
     @Test
-    void  testClose() {
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, dlqTopicName, kafkaProducer);
+    void testClose() {
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled,
+                Utils.noOpKafkaRecordErrorReporter());
         TopicPartitionWriter spyWriter = spy(writer);
-
         spyWriter.open();
         List<SinkRecord> records = new ArrayList<>();
-
-        records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "another,stringy,message", 5));
-        records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "{'also':'stringy','sortof':'message'}", 4));
-
-        for (SinkRecord sinkRecord  : records) {
-            spyWriter.writeRecord(sinkRecord,getHeaderTransforms());
+        records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA,
+                "another,stringy,message", 5));
+        records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA,
+                "{'also':'stringy','sortof':'message'}", 4));
+        for (SinkRecord sinkRecord : records) {
+            spyWriter.writeRecord(sinkRecord, getHeaderTransforms());
         }
         // 2 records are waiting to be ingested - expect close to revoke them so that even after 5 seconds it won't ingest
         Assertions.assertNotNull(spyWriter.lastCommittedOffset);
         spyWriter.close();
-        Awaitility.await().atMost(FLUSH_INTERVAL + CONTEXT_SWITCH_INTERVAL, TimeUnit.MILLISECONDS).
-                until(()->spyWriter.lastCommittedOffset!=null);
+        Awaitility.await().atMost(FLUSH_INTERVAL + CONTEXT_SWITCH_INTERVAL, TimeUnit.MILLISECONDS).until(() -> spyWriter.lastCommittedOffset != null);
     }
 
     private @NotNull Map<String, String> getKustoConfigs(String basePath, long fileThreshold, long flushInterval) {
