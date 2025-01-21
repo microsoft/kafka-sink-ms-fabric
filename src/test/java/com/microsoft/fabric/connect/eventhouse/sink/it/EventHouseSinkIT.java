@@ -545,7 +545,7 @@ class EventHouseSinkIT {
 
     @Execution(ExecutionMode.CONCURRENT)
     @ParameterizedTest(name = "Test DLQ tests for data format {0}")
-    @CsvSource({"avro"})
+    @CsvSource({"avro","json"})
     void testWritesToDlq(String dataFormat) throws IOException {
         // The goal is to check writes to DLQ for different message formats and not really how it is triggered which
         // are mostly runtime faults
