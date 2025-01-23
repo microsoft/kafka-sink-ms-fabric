@@ -172,6 +172,12 @@ The corresponding mapping can be
   not make it to the destination. Note that for a secure cluster, in addition to bootstrap server list and topic name,
   the security mechanism, the security protocol, jaas config have to be provided for the Kafka Connect worker and in the
   sink properties
+- Messages written to DLQ will be serialized using a ByteArrayConverter and written to the DLQ topic as byte arrays. 
+- The enqueued DLQ messages will have the following additional headers for troubleshooting and retry
+  - **kafka_topic**: The topic from which the message was read
+  - **kafka_partition**: The partition from which the message was read
+  - **kafka_offset**: The offset from which the message was read
+  - **kafka_timestamp**: The timestamp of the message
 
 ### 3.9. Miscellaneous Dead Letter Queue
 
@@ -406,9 +412,10 @@ connector aspect.
 
 ## 11. Release History
 
-| Release Version | Release Date | Changes Included                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-|-----------------|--------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1.0.0           | 2024-12-30   | <ul><li>Initial release</li></ul>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Release Version | Release Date | Changes Included                                                                             |
+|-----------------|--------------|----------------------------------------------------------------------------------------------|
+| 1.0.0           | 2024-12-30   | <ul><li>Initial release</li></ul>                                                            |  
+| 1.1.0           | 2024-01-21   | <ul><li>Add additional headers for DLQ support</li><br/><li>Bump Kusto SDK version</li></ul> |  
 
 ## 12. Contributing
 

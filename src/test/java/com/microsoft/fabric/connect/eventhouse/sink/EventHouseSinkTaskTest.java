@@ -22,8 +22,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.stubbing.Answer;
+import org.slf4j.LoggerFactory;
 
-import com.microsoft.azure.kusto.data.Client;
 import com.microsoft.azure.kusto.ingest.IngestClient;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.fabric.connect.eventhouse.sink.appender.TestAppender;
@@ -34,7 +34,7 @@ import static org.mockito.Mockito.*;
 
 class EventHouseSinkTaskTest {
     File currentDirectory;
-
+    private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(EventHouseSinkTaskTest.class);
     @BeforeEach
     public final void before() {
         currentDirectory = getCurrentWorkingDirectory();
@@ -50,6 +50,7 @@ class EventHouseSinkTaskTest {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
         EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
         EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+        doReturn(Utils.noOpKafkaRecordErrorReporter()).when(eventHouseSinkTaskSpy).createKafkaRecordErrorReporter();
         eventHouseSinkTaskSpy.start(configs);
         ArrayList<TopicPartition> tps = new ArrayList<>();
         tps.add(new TopicPartition("topic1", 1));
@@ -64,7 +65,7 @@ class EventHouseSinkTaskTest {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
         EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
         EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
-        
+        doReturn(Utils.noOpKafkaRecordErrorReporter()).when(eventHouseSinkTaskSpy).createKafkaRecordErrorReporter();
         eventHouseSinkTaskSpy.start(configs);
         ArrayList<TopicPartition> tps = new ArrayList<>();
         TopicPartition tp = new TopicPartition("topic1", 1);
@@ -83,6 +84,7 @@ class EventHouseSinkTaskTest {
             configs.put(FabricSinkConfig.KUSTO_SINK_TEMP_DIR_CONF, System.getProperty("java.io.tmpdir"));
             EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
             EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
+            doReturn(Utils.noOpKafkaRecordErrorReporter()).when(eventHouseSinkTaskSpy).createKafkaRecordErrorReporter();
             eventHouseSinkTaskSpy.start(configs);
             ArrayList<TopicPartition> tps = new ArrayList<>();
             tps.add(new TopicPartition("topic1", 1));
@@ -105,7 +107,7 @@ class EventHouseSinkTaskTest {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
         EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
         EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
-        
+
         eventHouseSinkTaskSpy.start(configs);
         {
             // single table mapping should cause all topics to be mapped to a single table
@@ -125,7 +127,7 @@ class EventHouseSinkTaskTest {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
         EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
         EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
-        
+
         eventHouseSinkTaskSpy.start(configs);
         {
             // single table mapping should cause all topics to be mapped to a single table
@@ -144,13 +146,14 @@ class EventHouseSinkTaskTest {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
         EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
         EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
-        
+        doReturn(Utils.noOpKafkaRecordErrorReporter()).when(eventHouseSinkTaskSpy).createKafkaRecordErrorReporter();
         eventHouseSinkTaskSpy.start(configs);
         ArrayList<TopicPartition> tps = new ArrayList<>();
         tps.add(new TopicPartition("topic1", 1));
         tps.add(new TopicPartition("topic2", 2));
         tps.add(new TopicPartition("topic2", 3));
         eventHouseSinkTaskSpy.open(tps);
+
         // Clean fast close
         long l1 = System.currentTimeMillis();
         eventHouseSinkTaskSpy.close(tps);
@@ -161,7 +164,8 @@ class EventHouseSinkTaskTest {
         IngestClient mockedClient = mock(IngestClient.class);
         TopicIngestionProperties props = new TopicIngestionProperties();
         props.ingestionProperties = eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties;
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, new FabricSinkConfig(configs), false, null, null);
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, new FabricSinkConfig(configs),
+                false, Utils.noOpKafkaRecordErrorReporter());
         TopicPartitionWriter writerSpy = spy(writer);
         long sleepTime = 2 * 1000;
         Answer<Void> answer = invocation -> {
@@ -175,23 +179,9 @@ class EventHouseSinkTaskTest {
         eventHouseSinkTaskSpy.writers.put(tp, writerSpy);
         eventHouseSinkTaskSpy.close(tps);
         long l3 = System.currentTimeMillis();
-        System.out.println("l3-l2 " + (l3 - l2));
+        LOGGER.trace("l3-l2 {}" , (l3 - l2));
         assertTrue(l3 - l2 > sleepTime && l3 - l2 < sleepTime + 1000);
     }
-
-    @Test
-    void testCreateKustoEngineClient() {
-        HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
-        configs.put(FabricSinkConfig.KUSTO_SINK_FLUSH_INTERVAL_MS_CONF, "100");
-        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
-        EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
-        
-        eventHouseSinkTaskSpy.start(configs);
-        FabricSinkConfig fabricSinkConfig = new FabricSinkConfig(configs);
-        Client client = EventHouseSinkTask.createKustoEngineClient(fabricSinkConfig);
-        Assertions.assertNotNull(client);
-    }
-
 
     @Test
     void testStopSuccess() throws IOException {
@@ -240,7 +230,7 @@ class EventHouseSinkTaskTest {
         final List<LoggingEvent> log = appender.getLog();
         final LoggingEvent firstLogEntry = log.get(0);
         assertEquals(firstLogEntry.getLevel().toString(), Level.ERROR.toString());
-        assertEquals("Error closing kusto client",firstLogEntry.getMessage());
+        assertEquals("Error closing kusto client", firstLogEntry.getMessage());
     }
 
     @Test
@@ -268,7 +258,7 @@ class EventHouseSinkTaskTest {
         final List<LoggingEvent> log = appender.getLog();
         final LoggingEvent firstLogEntry = log.get(0);
         assertEquals(firstLogEntry.getLevel().toString(), Level.ERROR.toString());
-        assertEquals("Error closing kusto client",firstLogEntry.getMessage());
+        assertEquals("Error closing kusto client", firstLogEntry.getMessage());
     }
 
     @Test
@@ -277,7 +267,8 @@ class EventHouseSinkTaskTest {
         configs.put(FabricSinkConfig.KUSTO_SINK_FLUSH_INTERVAL_MS_CONF, "100");
         EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
         EventHouseSinkTask eventHouseSinkTaskSpy = spy(eventHouseSinkTask);
-        
+        doReturn(Utils.noOpKafkaRecordErrorReporter()).when(eventHouseSinkTaskSpy).createKafkaRecordErrorReporter();
+
         eventHouseSinkTaskSpy.start(configs);
         ArrayList<TopicPartition> tps = new ArrayList<>();
         TopicPartition topic1 = new TopicPartition("topic1", 1);
@@ -287,7 +278,7 @@ class EventHouseSinkTaskTest {
         TopicIngestionProperties props = new TopicIngestionProperties();
         props.ingestionProperties = eventHouseSinkTaskSpy.getIngestionProps("topic1").ingestionProperties;
         TopicPartitionWriter topicPartitionWriterSpy = spy(
-                new TopicPartitionWriter(topic1, mockedClient, props, new FabricSinkConfig(configs), false, null, null));
+                new TopicPartitionWriter(topic1, mockedClient, props, new FabricSinkConfig(configs), false, Utils.noOpKafkaRecordErrorReporter()));
         topicPartitionWriterSpy.open();
         eventHouseSinkTaskSpy.writers.put(topic1, topicPartitionWriterSpy);
 

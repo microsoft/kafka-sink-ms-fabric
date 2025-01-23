@@ -27,6 +27,7 @@ public class HeaderTransforms {
         this.headersToProject = headersToProject;
         this.headersToDrop = headersToDrop;
     }
+
     public HeaderTransforms() {
         // No args constructor for serialization
     }

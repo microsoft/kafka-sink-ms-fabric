@@ -11,6 +11,8 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.microsoft.fabric.connect.eventhouse.sink.dlq.KafkaRecordErrorReporter;
+
 public class Utils {
     private static final Logger LOGGER = LoggerFactory.getLogger(Utils.class);
 
@@ -63,5 +65,13 @@ public class Utils {
     public static int getFilesCount(String path) {
         File folder = new File(path);
         return Objects.requireNonNull(folder.list(), String.format("File %s is empty and has no files", path)).length;
+    }
+
+    @Contract(pure = true)
+    public static @NotNull KafkaRecordErrorReporter noOpKafkaRecordErrorReporter() {
+        return (sinkRecord, e) -> {
+            LOGGER.warn(
+                    "Testign with old version of KafkaConnect. Ignoring error reporting for record: {}", sinkRecord);
+        };
     }
 }

@@ -71,7 +71,6 @@ public class FabricSinkConnectorConfigTest {
         Assertions.assertEquals(engineUrl, config.getKustoEngineUrl());
     }
 
-
     @Test
     void shouldUseKustoEngineUrlWhenGiven() {
         HashMap<String, String> settings = setupConfigs();
@@ -196,11 +195,10 @@ public class FabricSinkConnectorConfigTest {
 
         Assertions.assertThrows(
                 ConfigException.class,
-                () -> invokeGetTopicToTableMapping(settings)
-        );
+                () -> invokeGetTopicToTableMapping(settings));
     }
 
-    private void invokeGetTopicToTableMapping(HashMap<String, String> settings) throws JsonProcessingException{
+    private void invokeGetTopicToTableMapping(HashMap<String, String> settings) throws JsonProcessingException {
         new FabricSinkConfig(settings).getTopicToTableMapping();
     }
 

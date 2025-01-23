@@ -48,7 +48,7 @@ public class FabricSinkConnector extends SinkConnector {
 
     @Override
     public Class<? extends Task> taskClass() {
-        if(config.getFabricTarget() == FabricSinkConfig.FabricTarget.EVENTHOUSE) {
+        if (config.getFabricTarget() == FabricSinkConfig.FabricTarget.EVENTHOUSE) {
             return EventHouseSinkTask.class;
         } else {
             throw new NotImplementedException("EventStream fabric target not implemented.");

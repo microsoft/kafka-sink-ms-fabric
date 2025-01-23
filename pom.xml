@@ -8,7 +8,7 @@
     <artifactId>kafka-sink-ms-fabric</artifactId>
     <packaging>jar</packaging>
     <description>A Kafka Connect plugin for MS Fabric</description>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <properties>
         <avro.random.generator.version>0.4.1</avro.random.generator.version>
         <awaitility.version>4.2.2</awaitility.version>
@@ -27,12 +27,11 @@
         <junit.version>5.11.4</junit.version>
         <kafka.connect.avro.converter.version>7.8.0</kafka.connect.avro.converter.version>
         <kafka.version>3.9.0</kafka.version>
-        <kusto.sdk.version>5.2.0</kusto.sdk.version>
+        <kusto.sdk.version>6.0.0</kusto.sdk.version>
         <mockito.version>4.11.0</mockito.version>
         <mvn.assembly.plugin.version>3.2.0</mvn.assembly.plugin.version>
         <mvn.compiler.plugin.version>3.11.0</mvn.compiler.plugin.version>
-        <mvn.failsafe.plugin.version>3.0.0</mvn.failsafe.plugin.version>
-        <mvn.surefire.plugin.version>3.0.0</mvn.surefire.plugin.version>
+        <mvn.failsafe.plugin.version>3.5.2</mvn.failsafe.plugin.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <testcontainer.version>1.20.4</testcontainer.version>
     </properties>
@@ -111,6 +110,14 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <version>${mvn.failsafe.plugin.version}</version>
+                <configuration>
+                    <properties>
+                        <configurationParameters>
+                            junit.jupiter.execution.parallel.enabled = true
+                            junit.jupiter.execution.parallel.mode.default = concurrent
+                        </configurationParameters>
+                    </properties>
+                </configuration>
                 <executions>
                     <execution>
                         <goals>
@@ -196,62 +203,14 @@
     </developers>
     <dependencies>
         <dependency>
-            <groupId>com.azure</groupId>
-            <artifactId>azure-messaging-eventhubs</artifactId>
-            <version>${eventhubs.version}</version>
-        </dependency>
-        <dependency>
             <groupId>com.microsoft.azure.kusto</groupId>
             <artifactId>kusto-data</artifactId>
             <version>${kusto.sdk.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.azure</groupId>
-                    <artifactId>azure-identity</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.azure</groupId>
-                    <artifactId>azure-core</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.azure</groupId>
-                    <artifactId>azure-core-http-netty</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-        <dependency>
-            <groupId>com.azure</groupId>
-            <artifactId>azure-identity</artifactId>
-            <version>${az.identity.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.azure</groupId>
-            <artifactId>azure-core</artifactId>
-            <version>${az.core.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>com.azure</groupId>
-            <artifactId>azure-core-http-netty</artifactId>
-            <version>${az.netty.version}</version>
         </dependency>
         <dependency>
             <groupId>com.microsoft.azure.kusto</groupId>
             <artifactId>kusto-ingest</artifactId>
             <version>${kusto.sdk.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>com.azure</groupId>
-                    <artifactId>azure-identity</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.azure</groupId>
-                    <artifactId>azure-core</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.azure</groupId>
-                    <artifactId>azure-core-http-netty</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
         <dependency>
             <groupId>commons-codec</groupId>

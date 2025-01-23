@@ -88,13 +88,13 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
             sinkRecord.headers().addInt(String.format("DropInt-%s", i), i);
             byte[] bytesData = new byte[20];
             SecureRandom.getInstanceStrong().nextBytes(bytesData);
-            sinkRecord.headers().addBytes(String.format("HeaderBytes-%s", i),bytesData);
-            sinkRecord.headers().addBytes(String.format("DropBytes-%s", i),bytesData);
+            sinkRecord.headers().addBytes(String.format("HeaderBytes-%s", i), bytesData);
+            sinkRecord.headers().addBytes(String.format("DropBytes-%s", i), bytesData);
             records.add(sinkRecord);
             String expectedValueString = isSimpleValue ? RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value))
                     : new String(converter.convertToJson((GenericData.Record) value));
             String expectedKeyString = isSimpleKey ? key.toString() : new String(converter.convertToJson((GenericData.Record) key));
-            Map<String,Object> headerMap = new HashMap<>();
+            Map<String, Object> headerMap = new HashMap<>();
             headerMap.put(String.format("HeaderInt-%s", i), String.valueOf(i));
             headerMap.put(String.format("HeaderBytes-%s", i), bytesData);
             String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(headerMap);
@@ -106,7 +106,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
         for (SinkRecord sinkRecord : records) {
-            rd.write(sinkRecord, IngestionProperties.DataFormat.AVRO,headerTransforms());
+            rd.write(sinkRecord, IngestionProperties.DataFormat.AVRO, headerTransforms());
         }
         rd.commit();
         validate(file.getPath(), expectedResultsMap);
@@ -153,7 +153,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
         for (SinkRecord sinkRecord : records) {
-            rd.write(sinkRecord, IngestionProperties.DataFormat.JSON,headerTransforms());
+            rd.write(sinkRecord, IngestionProperties.DataFormat.JSON, headerTransforms());
         }
         rd.commit();
         validate(file.getPath(), expectedResultsMap);
@@ -198,7 +198,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
         RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
-        rd.write(sinkRecord, IngestionProperties.DataFormat.JSON,headerTransforms());
+        rd.write(sinkRecord, IngestionProperties.DataFormat.JSON, headerTransforms());
         // verify
         validate(file.getPath(), expectedResultsMap);
         rd.commit();

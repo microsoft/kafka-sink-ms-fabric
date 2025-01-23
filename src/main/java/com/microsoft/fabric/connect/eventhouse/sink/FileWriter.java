@@ -187,7 +187,7 @@ public class FileWriter implements Closeable {
     }
 
     private void handleErrors(Exception e) {
-        String errorMessage ="Failed to write records to KustoDB.";
+        String errorMessage = "Failed to write records to KustoDB.";
         if (FabricSinkConfig.BehaviorOnError.FAIL == behaviorOnError) {
             throw new ConnectException(errorMessage, e);
         } else if (FabricSinkConfig.BehaviorOnError.LOG == behaviorOnError) {

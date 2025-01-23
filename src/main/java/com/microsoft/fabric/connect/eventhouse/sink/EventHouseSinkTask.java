@@ -1,19 +1,19 @@
 package com.microsoft.fabric.connect.eventhouse.sink;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.http.HttpHost;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.jetbrains.annotations.NotNull;
@@ -22,17 +22,19 @@ import org.slf4j.LoggerFactory;
 
 import com.azure.core.credential.AccessToken;
 import com.azure.core.credential.TokenRequestContext;
+import com.azure.core.http.ProxyOptions;
 import com.azure.identity.WorkloadIdentityCredential;
 import com.azure.identity.WorkloadIdentityCredentialBuilder;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.microsoft.azure.kusto.data.Client;
-import com.microsoft.azure.kusto.data.ClientFactory;
-import com.microsoft.azure.kusto.data.HttpClientProperties;
 import com.microsoft.azure.kusto.data.auth.ConnectionStringBuilder;
+import com.microsoft.azure.kusto.data.http.HttpClientProperties;
 import com.microsoft.azure.kusto.ingest.IngestClient;
 import com.microsoft.azure.kusto.ingest.IngestClientFactory;
 import com.microsoft.azure.kusto.ingest.IngestionMapping;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import com.microsoft.fabric.connect.eventhouse.sink.dlq.KafkaRecordErrorReporter;
+import com.microsoft.fabric.connect.eventhouse.sink.dlq.LegacyErrorReporter;
+import com.microsoft.fabric.connect.eventhouse.sink.dlq.NoOpLoggerErrorReporter;
 
 /**
  * Kusto sink uses file system to buffer records.
@@ -50,8 +52,6 @@ public class EventHouseSinkTask extends SinkTask {
     private HeaderTransforms headerTransforms;
     private FabricSinkConfig config;
     private boolean isDlqEnabled;
-    private String dlqTopicName;
-    private Producer<byte[], byte[]> dlqProducer;
 
     public EventHouseSinkTask() {
         assignment = new HashSet<>();
@@ -121,14 +121,6 @@ public class EventHouseSinkTask extends SinkTask {
         return connectionStringBuilder;
     }
 
-    public static @NotNull Client createKustoEngineClient(FabricSinkConfig config) {
-        try {
-            return ClientFactory.createClient(createKustoEngineConnectionString(config, config.getKustoEngineUrl()));
-        } catch (Exception e) {
-            throw new ConnectException("Failed to initialize KustoEngineClient", e);
-        }
-    }
-
     public static Map<String, TopicIngestionProperties> getTopicsToIngestionProps(FabricSinkConfig config) {
         Map<String, TopicIngestionProperties> result = new HashMap<>();
 
@@ -162,8 +154,8 @@ public class EventHouseSinkTask extends SinkTask {
         try {
             HttpClientProperties httpClientProperties = null;
             if (StringUtils.isNotEmpty(config.getConnectionProxyHost()) && config.getConnectionProxyPort() > -1) {
-                httpClientProperties = HttpClientProperties.builder()
-                        .proxy(new HttpHost(config.getConnectionProxyHost(), config.getConnectionProxyPort())).build();
+                httpClientProperties = HttpClientProperties.builder().proxy(new ProxyOptions(ProxyOptions.Type.HTTP,
+                        new InetSocketAddress(config.getConnectionProxyHost(), config.getConnectionProxyPort()))).build();
             }
             ConnectionStringBuilder ingestConnectionStringBuilder = createKustoEngineConnectionString(config, config.getKustoIngestUrl());
             kustoIngestClient = httpClientProperties != null ? IngestClientFactory.createClient(ingestConnectionStringBuilder, httpClientProperties)
@@ -202,7 +194,7 @@ public class EventHouseSinkTask extends SinkTask {
             } else {
                 IngestClient client = ingestionProps.streaming ? streamingIngestClient : kustoIngestClient;
                 TopicPartitionWriter writer = new TopicPartitionWriter(tp, client, ingestionProps, config, isDlqEnabled,
-                        dlqTopicName, dlqProducer);
+                        createKafkaRecordErrorReporter());
                 writer.open();
                 writers.put(tp, writer);
             }
@@ -234,19 +226,8 @@ public class EventHouseSinkTask extends SinkTask {
         String url = config.getKustoIngestUrl();
         if (config.isDlqEnabled()) {
             isDlqEnabled = true;
-            dlqTopicName = config.getDlqTopicName();
-            Properties properties = config.getDlqProps();
-            LOGGER.info("Initializing miscellaneous dead-letter queue producer with the following properties: {}",
-                    properties.keySet());
-            try {
-                dlqProducer = new KafkaProducer<>(properties);
-            } catch (Exception e) {
-                throw new ConnectException("Failed to initialize producer for miscellaneous dead-letter queue", e);
-            }
         } else {
-            dlqProducer = null;
             isDlqEnabled = false;
-            dlqTopicName = null;
         }
         topicsToIngestionProps = getTopicsToIngestionProps(config);
         // this should be read properly from settings
@@ -297,10 +278,10 @@ public class EventHouseSinkTask extends SinkTask {
                         sinkRecord.kafkaOffset(), sinkRecord.key(), sinkRecord.kafkaPartition());
             }
             try {
-                if(headerTransforms == null){
+                if (headerTransforms == null) {
                     headerTransforms = config.headerTransforms();
                 }
-            } catch (JsonProcessingException e){
+            } catch (JsonProcessingException e) {
                 LOGGER.warn("Error parsing HeaderTransforms field: ", e);
             }
             writer.writeRecord(sinkRecord, headerTransforms);
@@ -332,6 +313,40 @@ public class EventHouseSinkTask extends SinkTask {
             }
         }
         return offsetsToCommit;
+    }
+
+    /* Used to report a record back to DLQ if error tolerance is specified */
+    protected KafkaRecordErrorReporter createKafkaRecordErrorReporter() {
+        KafkaRecordErrorReporter errorReporter = isDlqEnabled ? new LegacyErrorReporter(config): new NoOpLoggerErrorReporter();
+        if (context != null) {
+            try {
+                ErrantRecordReporter errantRecordReporter = context.errantRecordReporter();
+                if (errantRecordReporter != null) {
+                    errorReporter = (sinkRecord, error) -> {
+                        try {
+                            // Blocking this until record is delivered to DLQ
+                            LOGGER.info(
+                                    "Sending Sink Record to DLQ using Errant reporter recordOffset:{}, partition:{}",
+                                    sinkRecord.kafkaOffset(),
+                                    sinkRecord.kafkaPartition());
+                            errantRecordReporter.report(sinkRecord, error).get();
+                        } catch (InterruptedException | ExecutionException e) {
+                            final String errMsg = "ERROR reporting records to ErrantRecordReporter";
+                            throw new ConnectException(errMsg, e);
+                        }
+                    };
+                } else {
+                    LOGGER.info("Errant record reporter is not configured.");
+                }
+            } catch (NoClassDefFoundError | NoSuchMethodError e) {
+                // Will occur in Connect runtimes earlier than 2.6
+                LOGGER.info(
+                        "Kafka versions prior to 2.6 do not support the errant record reporter.");
+            }
+        } else {
+            LOGGER.warn("SinkTaskContext is not set , falling back to legacy error reporter");
+        }
+        return errorReporter;
     }
 
     @Override
