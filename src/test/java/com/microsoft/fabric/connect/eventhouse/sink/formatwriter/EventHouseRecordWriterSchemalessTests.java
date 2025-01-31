@@ -25,6 +25,7 @@ import io.confluent.avro.random.generator.Generator;
 import tech.allegro.schema.json2avro.converter.JsonAvroConverter;
 
 class EventHouseRecordWriterSchemalessTests extends EventHouseRecordWriterBase {
+
     @ParameterizedTest(name = "JSON data serialized as bytes with key schema {0} and " +
             "value schema {1} should be deserialized correctly. Simple key: {2}, Simple value: {3}")
     @CsvSource({
@@ -66,7 +67,7 @@ class EventHouseRecordWriterSchemalessTests extends EventHouseRecordWriterBase {
         Utils.restrictPermissions(file);
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
-        RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
+        RecordWriter rd = writer.getRecordWriter(file.getPath(), out, FABRIC_SINK_CONFIG);
         for (SinkRecord sinkRecord : records) {
             rd.write(sinkRecord, IngestionProperties.DataFormat.JSON, headerTransforms());
         }
@@ -118,7 +119,7 @@ class EventHouseRecordWriterSchemalessTests extends EventHouseRecordWriterBase {
         Utils.restrictPermissions(file);
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
-        RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
+        RecordWriter rd = writer.getRecordWriter(file.getPath(), out, FABRIC_SINK_CONFIG);
         for (SinkRecord sinkRecord : records) {
             rd.write(sinkRecord, IngestionProperties.DataFormat.AVRO, headerTransforms());
         }

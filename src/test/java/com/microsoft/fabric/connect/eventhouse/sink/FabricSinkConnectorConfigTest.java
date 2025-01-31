@@ -174,8 +174,8 @@ public class FabricSinkConnectorConfigTest {
         FabricSinkConfig config = new FabricSinkConfig(settings);
         Assertions.assertArrayEquals(
                 new TopicToTableMapping[] {
-                        new TopicToTableMapping(null, "csv", "table1", "db1", "topic1", false),
-                        new TopicToTableMapping("Mapping", "json", "table2", "db2", "topic2", false)
+                        new TopicToTableMapping(null, "csv", "table1", "db1", "topic1", false, "false"),
+                        new TopicToTableMapping("Mapping", "json", "table2", "db2", "topic2", false, "false")
                 },
                 config.getTopicToTableMapping());
     }

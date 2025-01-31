@@ -104,7 +104,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
         Utils.restrictPermissions(file);
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
-        RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
+        RecordWriter rd = writer.getRecordWriter(file.getPath(), out, FABRIC_SINK_CONFIG);
         for (SinkRecord sinkRecord : records) {
             rd.write(sinkRecord, IngestionProperties.DataFormat.AVRO, headerTransforms());
         }
@@ -151,7 +151,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
         Utils.restrictPermissions(file);
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
-        RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
+        RecordWriter rd = writer.getRecordWriter(file.getPath(), out, FABRIC_SINK_CONFIG);
         for (SinkRecord sinkRecord : records) {
             rd.write(sinkRecord, IngestionProperties.DataFormat.JSON, headerTransforms());
         }
@@ -197,7 +197,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
         Utils.restrictPermissions(file);
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
-        RecordWriter rd = writer.getRecordWriter(file.getPath(), out);
+        RecordWriter rd = writer.getRecordWriter(file.getPath(), out, FABRIC_SINK_CONFIG);
         rd.write(sinkRecord, IngestionProperties.DataFormat.JSON, headerTransforms());
         // verify
         validate(file.getPath(), expectedResultsMap);

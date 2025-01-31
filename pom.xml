@@ -8,7 +8,7 @@
     <artifactId>kafka-sink-ms-fabric</artifactId>
     <packaging>jar</packaging>
     <description>A Kafka Connect plugin for MS Fabric</description>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
     <properties>
         <avro.random.generator.version>0.4.1</avro.random.generator.version>
         <awaitility.version>4.2.2</awaitility.version>
