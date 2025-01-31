@@ -54,13 +54,20 @@ public class FileWriter implements Closeable {
     private boolean shouldWriteAvroAsBytes = false;
     private boolean stopped = false;
     private boolean isDlqEnabled = false;
+    private FabricSinkConfig fabricSinkConfig;
 
     /**
-     * @param basePath        - This is path to which to write the files to.
-     * @param fileThreshold   - Max size, uncompressed bytes.
-     * @param onRollCallback  - Callback to allow code to execute when rolling a file. Blocking code.
-     * @param getFilePath     - Allow external resolving of file name.
-     * @param behaviorOnError - Either log, fail or ignore errors based on the mode.
+     *
+     * @param basePath The base path for the files
+     * @param fileThreshold The threshold for the file size
+     * @param onRollCallback The callback to be called when the file is rolled
+     * @param getFilePath The function to get the file path
+     * @param flushInterval The interval to flush the file
+     * @param reentrantLock The lock to be used for the file writer
+     * @param format The format of the data
+     * @param behaviorOnError The behavior on error
+     * @param isDlqEnabled The flag to enable DLQ
+     * @param fabricSinkConfig The fabric sink config
      */
     public FileWriter(String basePath,
             long fileThreshold,
@@ -70,7 +77,7 @@ public class FileWriter implements Closeable {
             ReentrantReadWriteLock reentrantLock,
             IngestionProperties.DataFormat format,
             BehaviorOnError behaviorOnError,
-            boolean isDlqEnabled) {
+            boolean isDlqEnabled, FabricSinkConfig fabricSinkConfig) {
         this.getFilePath = getFilePath;
         this.basePath = basePath;
         this.fileThreshold = fileThreshold;
@@ -83,6 +90,7 @@ public class FileWriter implements Closeable {
         // If we failed on flush we want to throw the error from the put() flow.
         flushError = null;
         this.format = format;
+        this.fabricSinkConfig = fabricSinkConfig;
     }
 
     boolean isDirty() {
@@ -148,7 +156,7 @@ public class FileWriter implements Closeable {
         countingStream = new CountingOutputStream(new GZIPOutputStream(fos));
         outputStream = countingStream.getOutputStream();
         LOGGER.debug("Opened new file for writing: {}", fileProps.file);
-        recordWriter = recordWriterProvider.getRecordWriter(currentFile.path, countingStream);
+        recordWriter = recordWriterProvider.getRecordWriter(currentFile.path, countingStream, fabricSinkConfig);
     }
 
     void rotate(@Nullable Long offset) throws IOException, DataException {

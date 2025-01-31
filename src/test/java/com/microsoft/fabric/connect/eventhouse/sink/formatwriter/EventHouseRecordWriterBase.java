@@ -21,7 +21,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.fasterxml.jackson.databind.type.TypeFactory;
+import com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig;
 import com.microsoft.fabric.connect.eventhouse.sink.HeaderTransforms;
+
+import static com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConnectorConfigTest.setupConfigs;
 
 public abstract class EventHouseRecordWriterBase {
     protected static final String KEYS = "keys";
@@ -30,6 +33,7 @@ public abstract class EventHouseRecordWriterBase {
     protected static final ObjectMapper RESULT_MAPPER = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
             .enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
     protected static final TypeReference<Map<String, Object>> GENERIC_MAP = new TypeReference<Map<String, Object>>() {};
+    protected static final FabricSinkConfig FABRIC_SINK_CONFIG = new FabricSinkConfig(setupConfigs());
 
     public HeaderTransforms headerTransforms() throws JsonProcessingException {
         CollectionType resultType = TypeFactory.defaultInstance().constructCollectionType(Set.class, String.class);
@@ -65,7 +69,7 @@ public abstract class EventHouseRecordWriterBase {
             String actualValues = RESULT_MAPPER.writeValueAsString(actualMap);
             if (expected[2] == null) {
                 // there are no fields or no keys
-                Assertions.assertTrue(actualMap.keySet().isEmpty(), "Expected null value for tombstone record");
+                Assertions.assertTrue(actualMap.isEmpty(), "Expected null value for tombstone record");
             } else {
                 JSONAssert.assertEquals(expected[2], actualValues, false);
             }
