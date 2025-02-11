@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.stubbing.Answer;
 import org.slf4j.LoggerFactory;
 
+import com.codahale.metrics.MetricRegistry;
 import com.microsoft.azure.kusto.ingest.IngestClient;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.fabric.connect.eventhouse.sink.appender.TestAppender;
@@ -164,8 +165,9 @@ class EventHouseSinkTaskTest {
         IngestClient mockedClient = mock(IngestClient.class);
         TopicIngestionProperties props = new TopicIngestionProperties();
         props.ingestionProperties = eventHouseSinkTaskSpy.getIngestionProps("topic2").ingestionProperties;
+        MetricRegistry metricRegistry = new MetricRegistry();
         TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, new FabricSinkConfig(configs),
-                false, Utils.noOpKafkaRecordErrorReporter());
+                false, Utils.noOpKafkaRecordErrorReporter(), metricRegistry);
         TopicPartitionWriter writerSpy = spy(writer);
         long sleepTime = 2 * 1000;
         Answer<Void> answer = invocation -> {
@@ -277,8 +279,9 @@ class EventHouseSinkTaskTest {
         IngestClient mockedClient = mock(IngestClient.class);
         TopicIngestionProperties props = new TopicIngestionProperties();
         props.ingestionProperties = eventHouseSinkTaskSpy.getIngestionProps("topic1").ingestionProperties;
+        MetricRegistry metricRegistry = new MetricRegistry();
         TopicPartitionWriter topicPartitionWriterSpy = spy(
-                new TopicPartitionWriter(topic1, mockedClient, props, new FabricSinkConfig(configs), false, Utils.noOpKafkaRecordErrorReporter()));
+                new TopicPartitionWriter(topic1, mockedClient, props, new FabricSinkConfig(configs), false, Utils.noOpKafkaRecordErrorReporter(), metricRegistry));
         topicPartitionWriterSpy.open();
         eventHouseSinkTaskSpy.writers.put(topic1, topicPartitionWriterSpy);
 

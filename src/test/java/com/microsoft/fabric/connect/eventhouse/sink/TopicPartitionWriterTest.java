@@ -20,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codahale.metrics.MetricRegistry;
 import com.microsoft.azure.kusto.ingest.IngestClient;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.azure.kusto.ingest.source.FileSourceInfo;
@@ -44,6 +45,7 @@ public class TopicPartitionWriterTest {
     private File currentDirectory;
     private String basePathCurrent;
     private boolean isDlqEnabled;
+    private MetricRegistry metricRegistry = new MetricRegistry();
 
     @BeforeAll
     public static void beforeClass() {
@@ -70,7 +72,7 @@ public class TopicPartitionWriterTest {
         IngestClient mockedClient = mock(IngestClient.class);
         TopicIngestionProperties props = new TopicIngestionProperties();
         props.ingestionProperties = new IngestionProperties(DATABASE, TABLE);
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter(), metricRegistry);
         SourceFile descriptor = new SourceFile();
         descriptor.rawBytes = 1024;
         writer.handleRollFile(descriptor);
@@ -94,7 +96,7 @@ public class TopicPartitionWriterTest {
         TopicIngestionProperties props = new TopicIngestionProperties();
         props.ingestionProperties = new IngestionProperties(DATABASE, TABLE);
         props.streaming = true;
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockedClient, props, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter(), metricRegistry);
 
         SourceFile descriptor = new SourceFile();
         descriptor.rawBytes = 1024;
@@ -118,7 +120,7 @@ public class TopicPartitionWriterTest {
     @Test
     void testGetFilename() {
         try {
-            TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
+            TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter(), metricRegistry);
             File writerFile = new File(writer.getFilePath(null));
             Assertions.assertEquals("kafka_testPartition_11_0.JSON.gz", writerFile.getName());
         } catch (Exception ex) {
@@ -140,7 +142,7 @@ public class TopicPartitionWriterTest {
 
     @Test
     void testGetFilenameAfterOffsetChanges() {
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter(), metricRegistry);
         writer.open();
         List<SinkRecord> records = new ArrayList<>();
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "another,stringy,message", 5));
@@ -160,7 +162,7 @@ public class TopicPartitionWriterTest {
 
     @Test
     void testWriteStringyValuesAndOffset() {
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter(), metricRegistry);
         writer.open();
         List<SinkRecord> records = new ArrayList<>();
         records.add(new SinkRecord(tp.topic(), tp.partition(), null, null, Schema.STRING_SCHEMA, "another,stringy,message", 3));
@@ -188,7 +190,7 @@ public class TopicPartitionWriterTest {
         propsAvro.ingestionProperties.setDataFormat(IngestionProperties.DataFormat.AVRO);
         Map<String, String> settings2 = getKustoConfigs(basePathCurrent, fileThreshold2, FLUSH_INTERVAL);
         FabricSinkConfig config2 = new FabricSinkConfig(settings2);
-        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsAvro, config2, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter());
+        TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsAvro, config2, isDlqEnabled, Utils.noOpKafkaRecordErrorReporter(), metricRegistry);
 
         writer.open();
         List<SinkRecord> records = new ArrayList<>();
@@ -213,7 +215,7 @@ public class TopicPartitionWriterTest {
     @Test
     void testClose() {
         TopicPartitionWriter writer = new TopicPartitionWriter(tp, mockClient, propsCsv, config, isDlqEnabled,
-                Utils.noOpKafkaRecordErrorReporter());
+                Utils.noOpKafkaRecordErrorReporter(), metricRegistry);
         TopicPartitionWriter spyWriter = spy(writer);
         spyWriter.open();
         List<SinkRecord> records = new ArrayList<>();
