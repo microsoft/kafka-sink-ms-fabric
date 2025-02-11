@@ -173,10 +173,14 @@ class EventHouseSinkIT {
 
     @AfterAll
     public static void stopContainers() {
-        engineClient.executeMgmt(coordinates.database, String.format(".drop table %s", coordinates.table));
-        engineClient.executeMgmt(coordinates.database, String.format(".drop table %s", COMPLEX_AVRO_BYTES_TABLE_TEST));
-        engineClient.executeMgmt(coordinates.database, String.format(".drop table %s_d", coordinates.table));
-        LOGGER.info("Finished table clean up. Dropped tables {} and {}", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
+        try {
+            engineClient.executeMgmt(coordinates.database, String.format(".drop table %s", coordinates.table));
+            engineClient.executeMgmt(coordinates.database, String.format(".drop table %s", COMPLEX_AVRO_BYTES_TABLE_TEST));
+            engineClient.executeMgmt(coordinates.database, String.format(".drop table %s_d", coordinates.table));
+            LOGGER.info("Finished table clean up. Dropped tables {} and {}", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
+        } catch (DataServiceException | DataClientException e) {
+            LOGGER.error("Failed to drop tables during cleanup", e);
+        }
         connectContainer.stop();
         schemaRegistryContainer.stop();
         kafkaContainer.stop();

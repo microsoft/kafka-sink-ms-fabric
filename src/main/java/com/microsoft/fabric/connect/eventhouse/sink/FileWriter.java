@@ -20,11 +20,15 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Gauge;
+import com.codahale.metrics.MetricRegistry;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig.BehaviorOnError;
 import com.microsoft.fabric.connect.eventhouse.sink.format.RecordWriter;
 import com.microsoft.fabric.connect.eventhouse.sink.format.RecordWriterProvider;
 import com.microsoft.fabric.connect.eventhouse.sink.formatwriter.EventHouseRecordWriterProvider;
+import com.microsoft.fabric.connect.eventhouse.sink.metrics.KustoKafkaMetricsUtil;
 
 /**
  * This class is used to write gzipped rolling files.
@@ -55,6 +59,14 @@ public class FileWriter implements Closeable {
     private boolean stopped = false;
     private boolean isDlqEnabled = false;
     private FabricSinkConfig fabricSinkConfig;
+    private Counter fileCountOnStage;
+    private Counter fileCountPurged;
+    private Counter bufferSizeBytes;
+    private Counter bufferRecordCount;
+    private long flushedOffsetValue;
+    private long purgedOffsetValue;
+    private Counter failedTempFileDeletions;
+    
 
     /**
      *
@@ -77,7 +89,9 @@ public class FileWriter implements Closeable {
             ReentrantReadWriteLock reentrantLock,
             IngestionProperties.DataFormat format,
             BehaviorOnError behaviorOnError,
-            boolean isDlqEnabled, FabricSinkConfig fabricSinkConfig) {
+            boolean isDlqEnabled, FabricSinkConfig fabricSinkConfig,
+            String tpname,
+            MetricRegistry metricRegistry) {
         this.getFilePath = getFilePath;
         this.basePath = basePath;
         this.fileThreshold = fileThreshold;
@@ -87,10 +101,39 @@ public class FileWriter implements Closeable {
         this.isDlqEnabled = isDlqEnabled;
         // This is a fair lock so that we flush close to the time intervals
         this.reentrantReadWriteLock = reentrantLock;
+        // Initialize the format field
+        this.format = format;
         // If we failed on flush we want to throw the error from the put() flow.
         flushError = null;
-        this.format = format;
         this.fabricSinkConfig = fabricSinkConfig;
+        initializeMetrics(tpname, metricRegistry);
+    }
+
+    private void initializeMetrics(String tpname, MetricRegistry metricRegistry) {
+        this.fileCountOnStage = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, KustoKafkaMetricsUtil.FILE_COUNT_ON_STAGE));
+        this.fileCountPurged = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, KustoKafkaMetricsUtil.FILE_COUNT_PURGED));
+        this.bufferSizeBytes = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.BUFFER_SUB_DOMAIN, KustoKafkaMetricsUtil.BUFFER_SIZE_BYTES));
+        this.bufferRecordCount = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.BUFFER_SUB_DOMAIN, KustoKafkaMetricsUtil.BUFFER_RECORD_COUNT));
+        this.failedTempFileDeletions = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, KustoKafkaMetricsUtil.FAILED_TEMP_FILE_DELETIONS));
+        String flushedOffsetMetricName = KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.OFFSET_SUB_DOMAIN, KustoKafkaMetricsUtil.FLUSHED_OFFSET);
+        if (!metricRegistry.getGauges().containsKey(flushedOffsetMetricName)) {
+            metricRegistry.register(flushedOffsetMetricName, new Gauge<Long>() {
+                @Override
+                public Long getValue() {
+                    return flushedOffsetValue;
+                }
+            });
+        }
+    
+        String purgedOffsetMetricName = KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.OFFSET_SUB_DOMAIN, KustoKafkaMetricsUtil.PURGED_OFFSET);
+        if (!metricRegistry.getGauges().containsKey(purgedOffsetMetricName)) {
+            metricRegistry.register(purgedOffsetMetricName, new Gauge<Long>() {
+                @Override
+                public Long getValue() {
+                    return purgedOffsetValue;
+                }
+            });
+        }
     }
 
     boolean isDirty() {
@@ -157,6 +200,7 @@ public class FileWriter implements Closeable {
         outputStream = countingStream.getOutputStream();
         LOGGER.debug("Opened new file for writing: {}", fileProps.file);
         recordWriter = recordWriterProvider.getRecordWriter(currentFile.path, countingStream, fabricSinkConfig);
+        fileCountOnStage.inc(); // Increment the file count on stage counter
     }
 
     void rotate(@Nullable Long offset) throws IOException, DataException {
@@ -214,6 +258,11 @@ public class FileWriter implements Closeable {
             boolean deleted = Files.deleteIfExists(temp.file.toPath());
             if (!deleted) {
                 LOGGER.warn("Couldn't delete temporary file. File exists: {}", temp.file.exists());
+                failedTempFileDeletions.inc();
+            } else {
+                fileCountPurged.inc();
+                purgedOffsetValue = flushedOffsetValue; // Update purgedOffsetValue
+                fileCountOnStage.dec();
             }
         }
     }
@@ -300,6 +349,16 @@ public class FileWriter implements Closeable {
         }
         currentFile.rawBytes = countingStream.numBytes;
         currentFile.numRecords++;
+        synchronized (bufferSizeBytes) {
+            bufferSizeBytes.dec(bufferSizeBytes.getCount()); // Reset the counter to zero
+            bufferSizeBytes.inc(currentFile.rawBytes); // Set the counter to the current size
+        }
+        synchronized (bufferRecordCount) {
+            bufferRecordCount.dec(bufferRecordCount.getCount()); // Reset the counter to zero
+            bufferRecordCount.inc(currentFile.numRecords); // Set the counter to the current number of records
+        }
+        flushedOffsetValue = sinkRecord.kafkaOffset(); // Update flushedOffsetValue
+    
         if (this.flushInterval == 0 || currentFile.rawBytes > fileThreshold || shouldWriteAvroAsBytes) {
             rotate(sinkRecord.kafkaOffset());
             resetFlushTimer(true);
