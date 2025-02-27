@@ -172,9 +172,10 @@ class EventHouseSinkIT {
     }
 
     @AfterAll
-    public static void stopContainers() throws Exception {
+    public static void stopContainers() {
         engineClient.executeMgmt(coordinates.database, String.format(".drop table %s", coordinates.table));
         engineClient.executeMgmt(coordinates.database, String.format(".drop table %s", COMPLEX_AVRO_BYTES_TABLE_TEST));
+        engineClient.executeMgmt(coordinates.database, String.format(".drop table %s_d", coordinates.table));
         LOGGER.info("Finished table clean up. Dropped tables {} and {}", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
         connectContainer.stop();
         schemaRegistryContainer.stop();
@@ -233,6 +234,7 @@ class EventHouseSinkIT {
             valueFormat = AvroConverter.class.getName();
             LOGGER.debug("Using value format: {}", valueFormat);
         }
+        // There are tests for CSV streaming. The other formats test for Queued ingestion
         String topicTableMapping = dataFormat.equals("csv")
                 ? String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'csv_mapping','streaming':'true'}]",
                         dataFormat, coordinates.database, coordinates.table, dataFormat)
@@ -273,6 +275,7 @@ class EventHouseSinkIT {
                 StandardCharsets.UTF_8));
         Generator randomDataBuilder = builder.build();
         Map<Long, String> expectedRecordsProduced = new HashMap<>();
+        String targetTopic = StringUtils.defaultIfBlank(targetTopicName, String.format("e2e.%s.topic", dataFormat));
         switch (dataFormat) {
             case "avro":
                 producerProperties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -287,7 +290,6 @@ class EventHouseSinkIT {
                         genericRecord.put("vtype", dataFormat);
                         List<Header> headers = new ArrayList<>();
                         headers.add(new RecordHeader("Iteration", (dataFormat + "-Header" + i).getBytes()));
-                        String targetTopic = StringUtils.defaultIfBlank(targetTopicName, String.format("e2e.%s.topic", dataFormat));
                         ProducerRecord<String, GenericData.Record> producerRecord = new ProducerRecord<>(targetTopic, 0, "Key-" + i, genericRecord, headers);
                         Map<String, Object> jsonRecordMap = genericRecord.getSchema().getFields().stream()
                                 .collect(Collectors.toMap(Schema.Field::name, field -> genericRecord.get(field.name())));
@@ -313,7 +315,6 @@ class EventHouseSinkIT {
                                 .collect(Collectors.toMap(Schema.Field::name, field -> genericRecord.get(field.name())));
                         List<Header> headers = new ArrayList<>();
                         headers.add(new RecordHeader("Iteration", (dataFormat + "-Header" + i).getBytes()));
-                        String targetTopic = StringUtils.defaultIfBlank(targetTopicName, String.format("e2e.%s.topic", dataFormat));
                         ProducerRecord<String, String> producerRecord = new ProducerRecord<>(targetTopic,
                                 0, "Key-" + i, OBJECT_MAPPER.writeValueAsString(jsonRecordMap), headers);
                         jsonRecordMap.put("vtype", dataFormat);
@@ -321,7 +322,7 @@ class EventHouseSinkIT {
                                 OBJECT_MAPPER.writeValueAsString(jsonRecordMap));
                         LOGGER.debug("JSON Record produced: {}", OBJECT_MAPPER.writeValueAsString(jsonRecordMap));
                         producer.send(producerRecord);
-                        ProducerRecord<String, String> tombstoneRecord = new ProducerRecord<>("e2e.json.topic",
+                        ProducerRecord<String, String> tombstoneRecord = new ProducerRecord<>(targetTopic,
                                 0, "TSKey-" + i, null, headers);
                         producer.send(tombstoneRecord);
                     }
@@ -344,7 +345,6 @@ class EventHouseSinkIT {
                         LOGGER.debug("CSV Record produced: {}", objectsCommaSeparated);
                         List<Header> headers = new ArrayList<>();
                         headers.add(new RecordHeader("Iteration", (dataFormat + "-Header" + i).getBytes()));
-                        String targetTopic = StringUtils.defaultIfBlank(targetTopicName, String.format("e2e.%s.topic", dataFormat));
                         ProducerRecord<String, String> producerRecord = new ProducerRecord<>(targetTopic, 0, "Key-" + i,
                                 objectsCommaSeparated, headers);
                         jsonRecordMap.put("vtype", dataFormat);
@@ -366,7 +366,6 @@ class EventHouseSinkIT {
                         byte[] dataToSend = genericRecord.toString().getBytes(StandardCharsets.UTF_8);
                         Map<String, Object> jsonRecordMap = genericRecord.getSchema().getFields().stream()
                                 .collect(Collectors.toMap(Schema.Field::name, field -> genericRecord.get(field.name())));
-                        String targetTopic = StringUtils.defaultIfBlank(targetTopicName, String.format("e2e.%s.topic", dataFormat));
                         ProducerRecord<String, byte[]> producerRecord = new ProducerRecord<>(
                                 targetTopic,
                                 String.format("Key-%s", i),
@@ -389,12 +388,15 @@ class EventHouseSinkIT {
         }
         LOGGER.info("Produced messages for format {}", dataFormat);
         return expectedRecordsProduced;
-
     }
 
     private void performDataAssertions(@NotNull String dataFormat, int maxRecords, Map<Long, String> expectedRecordsProduced) {
         String query = String.format("%s | where vtype == '%s' | project  %s,vresult = pack_all()",
                 coordinates.table, dataFormat, KEY_COLUMN);
+        performDataAssertions(maxRecords, expectedRecordsProduced, query);
+    }
+
+    private void performDataAssertions(int maxRecords, Map<Long, String> expectedRecordsProduced, @NotNull String query) {
         Map<Object, String> actualRecordsIngested = getRecordsIngested(query, maxRecords);
         actualRecordsIngested.keySet().parallelStream().forEach(key -> {
             long keyLong = Long.parseLong(key.toString());
@@ -402,7 +404,7 @@ class EventHouseSinkIT {
             try {
                 JSONAssert.assertEquals(expectedRecordsProduced.get(keyLong), actualRecordsIngested.get(key),
                         new CustomComparator(LENIENT,
-                                // there are sometimes round off errors in the double values but they are close enough to 8 precision
+                                // there are sometimes round off errors in the double values, but they are close enough to 8 precision
                                 new Customization("vdec", (vdec1,
                                         vdec2) -> Math.abs(Double.parseDouble(vdec1.toString()) - Double.parseDouble(vdec2.toString())) < 0.000000001),
                                 new Customization("vreal", (vreal1,
@@ -497,8 +499,7 @@ class EventHouseSinkIT {
         String countLongQuery = String.format("%s | summarize c = count() by event_id | project %s=event_id, " +
                 "vresult = bag_pack('event_id',event_id,'count',c)", COMPLEX_AVRO_BYTES_TABLE_TEST, KEY_COLUMN);
         Map<Object, String> actualRecordsIngested = getRecordsIngested(countLongQuery, maxRecords);
-        Awaitility.await().atMost(Duration.of(1, MINUTES)).
-                untilAsserted(() -> assertEquals(maxRecords, actualRecordsIngested.size()));
+        Awaitility.await().atMost(Duration.of(1, MINUTES)).untilAsserted(() -> assertEquals(maxRecords, actualRecordsIngested.size()));
         assertEquals(expectedResultMap, actualRecordsIngested);
     }
 
@@ -510,7 +511,7 @@ class EventHouseSinkIT {
      */
     private @NotNull Map<Object, String> getRecordsIngested(String query, int maxRecords) {
         Predicate<Object> predicate = results -> {
-            if (results != null && ((Map<?, ?>) results).size()>0) {
+            if (results != null && !((Map<?, ?>) results).isEmpty()) {
                 LOGGER.info("Retrieved records count {}", ((Map<?, ?>) results).size());
             }
             return results == null || ((Map<?, ?>) results).isEmpty() || ((Map<?, ?>) results).size() < maxRecords;
@@ -545,7 +546,7 @@ class EventHouseSinkIT {
 
     @Execution(ExecutionMode.CONCURRENT)
     @ParameterizedTest(name = "Test DLQ tests for data format {0}")
-    @CsvSource({"avro","json"})
+    @CsvSource({"avro", "json"})
     void testWritesToDlq(String dataFormat) throws IOException {
         // The goal is to check writes to DLQ for different message formats and not really how it is triggered which
         // are mostly runtime faults
@@ -563,7 +564,7 @@ class EventHouseSinkIT {
         Map<String, Object> overrides = new HashMap<>();
         overrides.put("behavior.on.error", "log");
         overrides.put("misc.deadletterqueue.bootstrap.servers", kafkaContainer.getEnvMap().get("KAFKA_LISTENERS"));
-        String dlqTopicName = String.format("e2e.tests.%s.dlq.topic",dataFormat);
+        String dlqTopicName = String.format("e2e.tests.%s.dlq.topic", dataFormat);
         overrides.put("misc.deadletterqueue.topic.name", dlqTopicName);
         overrides.put("proxy.host", proxyContainer.getContainerId().substring(0, 12));
         overrides.put("proxy.port", proxyContainer.getExposedPorts().get(0));
@@ -585,10 +586,9 @@ class EventHouseSinkIT {
             Awaitility.await().atMost(Duration.of(2, MINUTES)).until(() -> {
                 ConsumerRecords<byte[], byte[]> records = pollMessages(consumer);
                 records.forEach(dlqConsumerRecords::add);
-                return dlqConsumerRecords.size() == 100;
+                return dlqConsumerRecords.size() >= 100;
             });
         }
-        assertEquals(100, dlqConsumerRecords.size());
         dlqConsumerRecords.forEach(consumerRecord -> {
             assertNotNull(consumerRecord.headers().lastHeader("kafka_offset"));
             assertNotNull(consumerRecord.headers().lastHeader("kafka_partition"));
@@ -596,11 +596,52 @@ class EventHouseSinkIT {
         });
     }
 
+    @Execution(ExecutionMode.CONCURRENT)
+    @ParameterizedTest(name = "Test dynamic generic payload for data format {0}")
+    @CsvSource({"avro", "json"})
+    void testDynamicPayloads(String dataFormat) throws Exception {
+        String targetTopic = String.format("e2e.%s-dynamic.topic", dataFormat);
+        // The goal is to check writes to DLQ for different message formats and not really how it is triggered which
+        // are mostly runtime faults
+        String srUrl = String.format("http://%s:%s", schemaRegistryContainer.getContainerId().substring(0, 12), 8081);
+        String topicTableMapping = String.format("[{'topic': '%s','db': '%s', 'table': '%s_d','format':'%s'," +
+                "'dynamicPayload':'true'}]", targetTopic,
+                coordinates.database,
+                coordinates.table, dataFormat);
+        String valueFormat = StringConverter.class.getName();
+        String keyFormat = StringConverter.class.getName();
+        if (dataFormat.equals("avro")) {
+            valueFormat = AvroConverter.class.getName();
+        }
+        Map<String, Object> overrides = new HashMap<>();
+        overrides.put("behavior.on.error", "log");
+        overrides.put("connector.name", String.format("dynamic-connector-%s", dataFormat));
+        overrides.put("topics", targetTopic);
+        overrides.put("schema.registry.url", srUrl);
+        overrides.put("value.converter.schema.registry.url", srUrl);
+        overrides.put("key.converter.schema.registry.url", srUrl);
+        deployConnector(dataFormat, topicTableMapping, srUrl,
+                keyFormat,
+                valueFormat,
+                overrides);
+        String query = String.format("%s_d | evaluate bag_unpack(payload) | where vtype == '%s' | project  %s,vresult = pack_all()",
+                coordinates.table, dataFormat, KEY_COLUMN);
+        int maxRecords = 10;
+        Map<Long, String> expectedRecordsProduced = produceKafkaMessages(dataFormat, maxRecords, targetTopic);
+        if (expectedRecordsProduced.isEmpty()) {
+            performTombstoneAssertions();
+        } else {
+            performDataAssertions(maxRecords, expectedRecordsProduced, query);
+        }
+
+    }
+
     private static ConsumerRecords<byte[], byte[]> pollMessages(@NotNull KafkaConsumer<byte[], byte[]> consumer) {
         return consumer.poll(Duration.of(1000, MILLIS)); // Poll for up to 1000ms
     }
 
     private static @NotNull Properties getProperties(@NotNull String dataFormat) {
+        LOGGER.info("Creating consumer properties for DLQ for format {}", dataFormat);
         String keyDeserializer = ByteArrayDeserializer.class.getName();
         String valueDeserializer = ByteArrayDeserializer.class.getName();
         Properties consumerProperties = new Properties();

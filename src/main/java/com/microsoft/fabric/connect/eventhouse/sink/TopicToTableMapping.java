@@ -2,6 +2,7 @@ package com.microsoft.fabric.connect.eventhouse.sink;
 
 import java.util.Objects;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.config.ConfigException;
 
 public class TopicToTableMapping {
@@ -11,17 +12,20 @@ public class TopicToTableMapping {
     private String db;
     private String topic;
     private boolean streaming;
+    private String dynamicPayload;
 
     public TopicToTableMapping() {
     }
 
-    public TopicToTableMapping(String mapping, String format, String table, String db, String topic, boolean streaming) {
+    public TopicToTableMapping(String mapping, String format, String table, String db, String topic,
+            boolean streaming, String dynamicPayload) {
         this.mapping = mapping;
         this.format = format;
         this.table = table;
         this.db = db;
         this.topic = topic;
         this.streaming = streaming;
+        this.dynamicPayload = dynamicPayload;
     }
 
     public String getMapping() {
@@ -72,6 +76,14 @@ public class TopicToTableMapping {
         this.streaming = streaming;
     }
 
+    public boolean isDynamicPayload() {
+        return StringUtils.isNotEmpty(dynamicPayload) && "TRUE".equalsIgnoreCase(dynamicPayload); // well, you pass true as a string
+    }
+
+    public void setDynamicPayload(String dynamicPayload) {
+        this.dynamicPayload = dynamicPayload;
+    }
+
     void validate() {
         if (null == db || db.isEmpty()) {
             throw new ConfigException("'db' must be provided for each mapping");
@@ -95,6 +107,7 @@ public class TopicToTableMapping {
                 ", db='" + db + '\'' +
                 ", topic='" + topic + '\'' +
                 ", streaming=" + streaming +
+                ", dynamicPayload=" + dynamicPayload +
                 '}';
     }
 

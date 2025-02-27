@@ -35,6 +35,7 @@ import static org.mockito.Mockito.*;
 class EventHouseSinkTaskTest {
     File currentDirectory;
     private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(EventHouseSinkTaskTest.class);
+
     @BeforeEach
     public final void before() {
         currentDirectory = getCurrentWorkingDirectory();
@@ -179,7 +180,7 @@ class EventHouseSinkTaskTest {
         eventHouseSinkTaskSpy.writers.put(tp, writerSpy);
         eventHouseSinkTaskSpy.close(tps);
         long l3 = System.currentTimeMillis();
-        LOGGER.trace("l3-l2 {}" , (l3 - l2));
+        LOGGER.trace("l3-l2 {}", (l3 - l2));
         assertTrue(l3 - l2 > sleepTime && l3 - l2 < sleepTime + 1000);
     }
 

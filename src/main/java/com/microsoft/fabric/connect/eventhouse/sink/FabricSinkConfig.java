@@ -1,6 +1,7 @@
 package com.microsoft.fabric.connect.eventhouse.sink;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.io.FileUtils;
@@ -119,6 +120,8 @@ public class FabricSinkConfig extends AbstractConfig {
 
     private static final String HEADERS_TO_DROP_DOC = "Headers to drop";
     private static final String HEADERS_TO_DROP_DISPLAY = "Headers to be dropped";
+
+    private final ConcurrentHashMap<String, TopicToTableMapping> topicToTableMappingProperties = new ConcurrentHashMap<>();
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper().enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
 
@@ -479,12 +482,20 @@ public class FabricSinkConfig extends AbstractConfig {
     }
 
     public TopicToTableMapping[] getTopicToTableMapping() throws JsonProcessingException {
-        TopicToTableMapping[] mappings = OBJECT_MAPPER.readValue(getRawTopicToTableMapping(), TopicToTableMapping[].class);
-
-        for (TopicToTableMapping mapping : mappings) {
-            mapping.validate();
+        if (topicToTableMappingProperties.isEmpty()) {
+            TopicToTableMapping[] mappings = OBJECT_MAPPER.readValue(getRawTopicToTableMapping(), TopicToTableMapping[].class);
+            for (TopicToTableMapping mapping : mappings) {
+                mapping.validate();
+                topicToTableMappingProperties.put(mapping.getTopic(), mapping);
+            }
         }
-        return mappings;
+        return topicToTableMappingProperties.values().toArray(new TopicToTableMapping[0]);
+    }
+
+    // This is a redundant parser. However it is not a huge penalty that is incurred here on parse once or couple of times
+    // Not making this synchronized in purpose
+    public TopicToTableMapping getTopicToTableMapping(String topic) {
+        return topicToTableMappingProperties.get(topic);
     }
 
     public HeaderTransforms headerTransforms() throws JsonProcessingException {

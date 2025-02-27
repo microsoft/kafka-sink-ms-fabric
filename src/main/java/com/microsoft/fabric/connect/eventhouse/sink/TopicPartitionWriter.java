@@ -55,6 +55,7 @@ public class TopicPartitionWriter {
     private final KafkaRecordErrorReporter errorReporter;
     private final boolean isDlqEnabled;
     private final Retry ingestionRetry;
+    private final FabricSinkConfig fabricSinkConfig;
 
     public TopicPartitionWriter(TopicPartition tp, IngestClient client,
             @NotNull TopicIngestionProperties ingestionProps,
@@ -73,6 +74,7 @@ public class TopicPartitionWriter {
         this.behaviorOnError = config.getBehaviorOnError();
         this.errorReporter = errorReporter;
         this.isDlqEnabled = isDlqEnabled;
+        this.fabricSinkConfig = config;
 
         IntervalFunction sleepConfig = IntervalFunction.ofExponentialRandomBackoff(
                 retryBackOffTime,
@@ -200,7 +202,8 @@ public class TopicPartitionWriter {
                 reentrantReadWriteLock,
                 ingestionProps.ingestionProperties.getDataFormat(),
                 behaviorOnError,
-                isDlqEnabled);
+                isDlqEnabled,
+                fabricSinkConfig);
     }
 
     void close() {
