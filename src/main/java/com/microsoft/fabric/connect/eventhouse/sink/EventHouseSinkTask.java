@@ -317,7 +317,7 @@ public class EventHouseSinkTask extends SinkTask {
 
     /* Used to report a record back to DLQ if error tolerance is specified */
     protected KafkaRecordErrorReporter createKafkaRecordErrorReporter() {
-        KafkaRecordErrorReporter errorReporter = isDlqEnabled ? new LegacyErrorReporter(config): new NoOpLoggerErrorReporter();
+        KafkaRecordErrorReporter errorReporter = isDlqEnabled ? new LegacyErrorReporter(config) : new NoOpLoggerErrorReporter();
         if (context != null) {
             try {
                 ErrantRecordReporter errantRecordReporter = context.errantRecordReporter();

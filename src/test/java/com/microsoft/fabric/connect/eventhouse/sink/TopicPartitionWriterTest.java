@@ -234,7 +234,7 @@ public class TopicPartitionWriterTest {
         Map<String, String> settings = new HashMap<>();
         settings.put(FabricSinkConfig.KUSTO_INGEST_URL_CONF, KUSTO_INGEST_CLUSTER_URL);
         settings.put(FabricSinkConfig.KUSTO_ENGINE_URL_CONF, KUSTO_CLUSTER_URL);
-        settings.put(FabricSinkConfig.KUSTO_TABLES_MAPPING_CONF, "mapping");
+        settings.put(FabricSinkConfig.KUSTO_TABLES_MAPPING_CONF, "[{'topic': 'topic1', 'db': 'test', 'table': 'table1','format': 'csv'}]");
         settings.put(FabricSinkConfig.KUSTO_AUTH_APPID_CONF, "some-appid");
         settings.put(FabricSinkConfig.KUSTO_AUTH_APPKEY_CONF, "some-appkey");
         settings.put(FabricSinkConfig.KUSTO_AUTH_AUTHORITY_CONF, "some-authority");

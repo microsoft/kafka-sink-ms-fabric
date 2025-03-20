@@ -17,6 +17,7 @@ import org.jetbrains.annotations.NotNull;
 import com.fasterxml.jackson.core.JsonEncoding;
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
+import com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig;
 import com.microsoft.fabric.connect.eventhouse.sink.HeaderTransforms;
 import com.microsoft.fabric.connect.eventhouse.sink.format.RecordWriter;
 
@@ -25,9 +26,11 @@ public class EventHouseRecordWriter extends HeaderAndMetadataWriter implements R
     private final JsonGenerator writer;
     private final OutputStream plainOutputStream;
     private Schema schema;
+    private final FabricSinkConfig fabricSinkConfig;
 
-    public EventHouseRecordWriter(String filename, OutputStream out) {
+    public EventHouseRecordWriter(String filename, OutputStream out, FabricSinkConfig fabricSinkConfig) {
         this.filename = filename;
+        this.fabricSinkConfig = fabricSinkConfig;
         this.plainOutputStream = out;
         try {
             this.writer = OBJECT_MAPPER.getFactory()
@@ -82,25 +85,35 @@ public class EventHouseRecordWriter extends HeaderAndMetadataWriter implements R
     private void createRecord(@NotNull SinkRecord sinkRecord, Map<String, Object> parsedKeys,
             Map<String, Object> parsedHeaders, Map<String, String> kafkaMd,
             Map<String, Object> updatedValue) throws IOException {
+        boolean payloadAsDynamic = fabricSinkConfig.getTopicToTableMapping(sinkRecord.topic()) != null
+                && fabricSinkConfig.getTopicToTableMapping(sinkRecord.topic()).isDynamicPayload();
+        Map<String, Object> targetPayload = null;
+        if (payloadAsDynamic) {
+            targetPayload = new HashMap<>();
+            targetPayload.put(PAYLOAD_FIELD, updatedValue);
+        } else {
+            // Add all the value fields are flat
+            targetPayload = updatedValue;
+        }
         /* Add all the key fields */
         if (sinkRecord.key() != null) {
             if (parsedKeys.size() == 1 && parsedKeys.containsKey(KEY_FIELD)) {
-                updatedValue.put(KEYS_FIELD, parsedKeys.get(KEY_FIELD));
+                targetPayload.put(KEYS_FIELD, parsedKeys.get(KEY_FIELD));
             } else {
-                updatedValue.put(KEYS_FIELD, parsedKeys);
+                targetPayload.put(KEYS_FIELD, parsedKeys);
             }
         }
         /* End add key fields */
         /* Add record headers */
         if (sinkRecord.headers() != null && !sinkRecord.headers().isEmpty()) {
-            updatedValue.put(HEADERS_FIELD, parsedHeaders);
+            targetPayload.put(HEADERS_FIELD, parsedHeaders);
         }
         /* End record headers */
         /* Add metadata fields */
-        updatedValue.put(KAFKA_METADATA_FIELD, kafkaMd);
+        targetPayload.put(KAFKA_METADATA_FIELD, kafkaMd);
         /* End metadata fields */
         /* Write out each value row with key and header fields */
-        writer.writeObject(updatedValue);
+        writer.writeObject(targetPayload);
         writer.writeRaw(LINE_SEPARATOR);
     }
 

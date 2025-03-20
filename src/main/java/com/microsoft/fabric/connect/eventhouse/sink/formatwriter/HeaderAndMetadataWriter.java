@@ -28,6 +28,7 @@ public abstract class HeaderAndMetadataWriter {
     public static final String HEADERS_FIELD = "headers";
     public static final String KEYS_FIELD = "keys";
     public static final String KEY_FIELD = "key";
+    public static final String PAYLOAD_FIELD = "payload";
     public static final String VALUE_FIELD = "value";
 
     public static final String KAFKA_METADATA_FIELD = "kafkamd";

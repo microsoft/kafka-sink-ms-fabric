@@ -29,17 +29,18 @@ Eventhouse (Azure Data Explorer / Kusto) workloads on Fabric.
   * [4. Connect worker properties](#4-connect-worker-properties)
     * [4.1. Confluent Cloud](#41-confluent-cloud)
   * [5. Sink properties](#5-sink-properties)
-  * [6. Streaming ingestion](#6-streaming-ingestion)
-  * [7. Roadmap](#7-roadmap)
-  * [8. Deployment overview](#8-deployment-overview)
-    * [8.1. Standalone Kafka Connect deployment mode](#81-standalone-kafka-connect-deployment-mode)
-    * [8.2. Distributed Kafka Connect deployment mode](#82-distributed-kafka-connect-deployment-mode)
-  * [9. Connector download/build from source](#9-connector-downloadbuild-from-source)
-    * [9.1. Download a ready-to-use uber jar from our Github repo releases listing](#91-download-a-ready-to-use-uber-jar-from-our-github-repo-releases-listing)
-    * [9.2. Build uber jar from source](#92-build-uber-jar-from-source)
-  * [10. Test drive the connector - standalone mode](#10-test-drive-the-connector---standalone-mode)
-    * [10.1. Self-contained Dockerized setup](#101-self-contained-dockerized-setup)
-  * [11. Release History](#11-release-history)
+  * [6. Topic Table Mapping attributes](#6-topic-table-mapping-attributes)
+  * [7. Streaming ingestion](#7-streaming-ingestion)
+  * [8. Roadmap](#8-roadmap)
+  * [9. Deployment overview](#9-deployment-overview)
+    * [9.1. Standalone Kafka Connect deployment mode](#91-standalone-kafka-connect-deployment-mode)
+    * [9.2. Distributed Kafka Connect deployment mode](#92-distributed-kafka-connect-deployment-mode)
+  * [10. Connector download/build from source](#10-connector-downloadbuild-from-source)
+    * [10.1. Download a ready-to-use uber jar from our Github repo releases listing](#101-download-a-ready-to-use-uber-jar-from-our-github-repo-releases-listing)
+    * [10.2. Build uber jar from source](#102-build-uber-jar-from-source)
+  * [11. Test drive the connector - standalone mode](#11-test-drive-the-connector---standalone-mode)
+    * [11.1. Self-contained Dockerized setup](#111-self-contained-dockerized-setup)
+  * [12. Release History](#12-release-history)
   * [12. Contributing](#12-contributing)
 <!-- TOC -->
 <hr>
@@ -291,7 +292,18 @@ The following is complete set of connector sink properties -
 
 <hr>
 
-## 6. Streaming ingestion
+## 6. Topic Table Mapping attributes
+
+| # | Property       | Purpose                                                                                                                        | Details                                                                                                                                                                           |
+|:--|:---------------|:-------------------------------------------------------------------------------------------------------------------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1 | topic          | Kafka topic specification                                                                                                      | Topic name<br>*Required*                                                                                                                                                          |
+| 2 | db             | Target database                                                                                                                | Database name<br>*Required*                                                                                                                                                       |
+| 3 | mapping        | Ingestion mapping reference                                                                                                    | Database ingestion mapping reference. [Reference](https://learn.microsoft.com/en-us/kusto/management/mappings?view=microsoft-fabric)   <br>*Optional*                             |
+| 4 | streaming      | If the ingestion should use streaming                                                                                          | Enable streaming ingest on. 'true'/'false' . [Reference](https://learn.microsoft.com/en-us/azure/data-explorer/ingest-data-streaming?tabs=azure-portal%2Ccsharp)   <br>*Optional* |
+| 5 | table          | Target table for ingestion                                                                                                     | The table should be pre-created <br>*Required*                                                                                                                                    |
+| 6 | dynamicPayload | If the payload should be a dynamic field.<br> Useful in scenarios where multiple topics need to write to the same target table | The table has the definition ```.create-merge table <tbl> ([payload]:dynamic,[keys]:dynamic,[headers]:dynamic,[kafkamd]:dynamic ) ``` in this case <br>*Optional*                 |
+
+## 7. Streaming ingestion
 
 EventHouse supports [Streaming ingestion](https://docs.microsoft.com/azure/data-explorer/ingest-data-streaming) in order to
 achieve sub-second latency.
@@ -316,7 +328,7 @@ is suggested to be low (hundreds of milliseconds).
 We still recommend configuring ingestion batching policy at the table or database level, as the client falls back to
 queued ingestion in case of failure and retry-exhaustion.
 
-## 7. Roadmap
+## 8. Roadmap
 
 The following is the roadmap-<br>
 
@@ -325,17 +337,17 @@ The following is the roadmap-<br>
 | 1 | Support for EventStream |
 
 
-## 8. Deployment overview
+## 9. Deployment overview
 
 Kafka Connect connectors can be deployed in standalone mode (just for development) or in distributed mode (production)
 
-### 8.1. Standalone Kafka Connect deployment mode
+### 9.1. Standalone Kafka Connect deployment mode
 
 This involves having the connector plugin jar in /usr/share/java of a Kafka Connect worker, reference to the same plugin
 path in connect-standalone.properties, and launching of the connector from command line. This is not scalable, not fault
 tolerant, and is not recommended for production.
 
-### 8.2. Distributed Kafka Connect deployment mode
+### 9.2. Distributed Kafka Connect deployment mode
 
 Distributed Kafka Connect essentially involves creation of a KafkaConnect worker cluster as shown in the diagram
 below.<br>
@@ -356,15 +368,15 @@ below.<br>
 <hr>
 <br>
 
-## 9. Connector download/build from source
+## 10. Connector download/build from source
 
 Multiple options are available-
 
-### 9.1. Download a ready-to-use uber jar from our Github repo releases listing
+### 10.1. Download a ready-to-use uber jar from our Github repo releases listing
 
 https://github.com/microsoft/kafka-sink-ms-fabric/releases
 
-### 9.2. Build uber jar from source
+### 10.2. Build uber jar from source
 
 The dependencies are-
 
@@ -399,23 +411,24 @@ folder
 
 <hr>
 
-## 10. Test drive the connector - standalone mode
+## 11. Test drive the connector - standalone mode
 
 In a standalone mode (not recommended for production), the connector can be test-driven in any of the following ways-
 
-### 10.1. Self-contained Dockerized setup
+### 11.1. Self-contained Dockerized setup
 
 [Review this hands on lab](https://github.com/Azure/azure-kusto-labs/blob/master/kafka-integration/dockerized-quickstart/README.md)
 . It includes dockerized kafka, connector and Kafka producer to take away complexities and allow you to focus on the
 connector aspect.
 
 
-## 11. Release History
+## 12. Release History
 
 | Release Version | Release Date | Changes Included                                                                             |
 |-----------------|--------------|----------------------------------------------------------------------------------------------|
 | 1.0.0           | 2024-12-30   | <ul><li>Initial release</li></ul>                                                            |  
 | 1.1.0           | 2024-01-21   | <ul><li>Add additional headers for DLQ support</li><br/><li>Bump Kusto SDK version</li></ul> |  
+| 1.2.0           | 2024-01-31   | <ul><li>Support for optional field dynamicPayload</li></ul>                                  |  
 
 ## 12. Contributing
 
