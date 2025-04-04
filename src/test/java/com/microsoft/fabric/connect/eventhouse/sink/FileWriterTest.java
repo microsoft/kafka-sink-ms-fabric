@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codahale.metrics.MetricRegistry;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig.BehaviorOnError;
 import com.microsoft.fabric.connect.eventhouse.sink.formatwriter.EventHouseRecordWriter;
@@ -90,8 +91,9 @@ class FileWriterTest {
         Consumer<SourceFile> trackFiles = (SourceFile f) -> {
         };
         Function<Long, String> generateFileName = (Long l) -> FILE_PATH;
+        MetricRegistry metricRegistry = new MetricRegistry();
         try (FileWriter fileWriter = new FileWriter(path, MAX_FILE_SIZE, trackFiles, generateFileName, 30000, new ReentrantReadWriteLock(),
-                ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG)) {
+                ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG, "topic",  metricRegistry)) {
             String msg = "Line number 1: This is a message from the other size";
             SinkRecord sinkRecord = new SinkRecord("topic", 1, null, null, Schema.BYTES_SCHEMA, msg.getBytes(), 10);
             fileWriter.initializeRecordWriter(sinkRecord);
@@ -125,9 +127,10 @@ class FileWriterTest {
         Consumer<SourceFile> trackFiles = (SourceFile f) -> files.put(f.path, f.rawBytes);
         Function<Long, String> generateFileName = (Long l) -> Paths.get(path, String.valueOf(java.util.UUID.randomUUID())) + "csv.gz";
         EventHouseRecordWriter eventHouseRecordWriter = new EventHouseRecordWriter(path, NullOutputStream.INSTANCE, FABRIC_SINK_CONFIG);
+        MetricRegistry metricRegistry = new MetricRegistry();
         try (FileWriter fileWriter = new FileWriter(path, MAX_FILE_SIZE, trackFiles, generateFileName, 30000,
                 new ReentrantReadWriteLock(),
-                ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG)) {
+                ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG, "topic",  metricRegistry)) {
             for (int i = 0; i < 9; i++) {
                 String msg = String.format("Line number %d : This is a message from the other size", i);
                 SinkRecord record1 = new SinkRecord("topic", 1, null, null,
@@ -151,7 +154,7 @@ class FileWriterTest {
             List<Long> sortedFiles = new ArrayList<>(files.values());
             sortedFiles.sort((Long x, Long y) -> (int) (y - x));
             Assertions.assertEquals(
-                    Arrays.asList((long) 414, (long) 414, (long) 414, (long) 414, (long) 207),
+                    Arrays.asList((long) 416, (long) 416, (long) 416, (long) 416, (long) 208),
                     sortedFiles);
             // make sure folder is clear once done - with only the new file
             Assertions.assertEquals(1, getFilesCount(path));
@@ -168,8 +171,9 @@ class FileWriterTest {
         Consumer<SourceFile> trackFiles = (SourceFile f) -> files.put(f.path, f.rawBytes);
         Function<Long, String> generateFileName = (Long l) -> Paths.get(path, java.util.UUID.randomUUID().toString()) + "csv.gz";
         // Expect no files to be ingested as size is small and flushInterval is big
+        MetricRegistry metricRegistry = new MetricRegistry();
         FileWriter fileWriter = new FileWriter(path, MAX_FILE_SIZE, trackFiles, generateFileName, 30000, new ReentrantReadWriteLock(),
-                ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG);
+                ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG, "topic",  metricRegistry);
         String msg = "Message";
         SinkRecord sinkRecord = new SinkRecord("topic", 1, null, null, null, msg, 10);
         fileWriter.writeData(sinkRecord, getHeaderTransforms());
@@ -183,14 +187,14 @@ class FileWriterTest {
         Function<Long, String> generateFileName2 = (Long l) -> Paths.get(path2, java.util.UUID.randomUUID().toString()).toString();
         // Expect one file to be ingested as flushInterval had changed and is shorter than sleep time
         FileWriter fileWriter2 = new FileWriter(path2, MAX_FILE_SIZE, trackFiles, generateFileName2, 1000, new ReentrantReadWriteLock(),
-                ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG);
+                ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG, "topic",  metricRegistry);
         String msg2 = "Second Message";
         SinkRecord record1 = new SinkRecord("topic", 1, null, null, null, msg2, 10);
         fileWriter2.writeData(record1, getHeaderTransforms());
         Awaitility.await().atMost(3, SECONDS).untilAsserted(() -> Assertions.assertEquals(2, files.size()));
         List<Long> sortedFiles = new ArrayList<>(files.values());
         sortedFiles.sort((Long x, Long y) -> (int) (y - x));
-        Assertions.assertEquals(sortedFiles, Arrays.asList((long) 81, (long) 74));
+        Assertions.assertEquals(sortedFiles, Arrays.asList((long) 82, (long) 75));
         // make sure folder is clear once done
         fileWriter2.close();
         Assertions.assertEquals(1, getFilesCount(path));
@@ -223,10 +227,11 @@ class FileWriterTest {
             }
             return Paths.get(path, Long.toString(offset)).toString();
         };
+        MetricRegistry metricRegistry = new MetricRegistry();
         try (FileWriter fileWriter2 = new FileWriter(path, MAX_FILE_SIZE, trackFiles, generateFileName, 500,
                 reentrantReadWriteLock,
                 ingestionProps.getDataFormat(),
-                BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG)) {
+                BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG, "topic",  metricRegistry)) {
             String msg2 = "Second Message";
             reentrantReadWriteLock.readLock().lock();
             long recordOffset = 1;
@@ -260,8 +265,8 @@ class FileWriterTest {
              * > Why did this become 146 ? The CSV now becomes : 'Second Message','','','{"partition":"1","offset":"1","topic":"topic"}'\n 2 of these become 146
              * bytes
              */
-            Assertions.assertEquals(164L, files.stream().map(Map.Entry::getValue).toArray(Long[]::new)[0]);
-            Assertions.assertEquals(84L, files.stream().map(Map.Entry::getValue).toArray(Long[]::new)[1]);
+            Assertions.assertEquals(166L, files.stream().map(Map.Entry::getValue).toArray(Long[]::new)[0]);
+            Assertions.assertEquals(85L, files.stream().map(Map.Entry::getValue).toArray(Long[]::new)[1]);
             Assertions.assertEquals("1",
                     files.stream().map(s -> s.getKey().substring(path.length() + 1)).toArray(String[]::new)[0]);
             Assertions.assertEquals("3",

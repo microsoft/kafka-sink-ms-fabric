@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.apache.commons.io.FileUtils;
@@ -18,6 +19,10 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.Gauge;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.microsoft.azure.kusto.data.exceptions.KustoDataExceptionBase;
 import com.microsoft.azure.kusto.ingest.IngestClient;
 import com.microsoft.azure.kusto.ingest.IngestionMapping;
@@ -29,6 +34,7 @@ import com.microsoft.azure.kusto.ingest.source.FileSourceInfo;
 import com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig.BehaviorOnError;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.KafkaRecordErrorReporter;
 import com.microsoft.fabric.connect.eventhouse.sink.formatwriter.FormatWriterHelper;
+import com.microsoft.fabric.connect.eventhouse.sink.metrics.FabricKafkaMetricsUtil;
 
 import io.github.resilience4j.core.IntervalFunction;
 import io.github.resilience4j.retry.Retry;
@@ -56,12 +62,21 @@ public class TopicPartitionWriter {
     private final boolean isDlqEnabled;
     private final Retry ingestionRetry;
     private final FabricSinkConfig fabricSinkConfig;
+    private final MetricRegistry metricRegistry;
+    private Counter fileCountOnIngestion;
+    private Counter fileCountTableStageIngestionFail;
+    private Counter ingestionErrorCount;
+    private Counter ingestionSuccessCount;
+    private Timer commitLag;
+    private Timer ingestionLag;
+    private long writeTime;
 
     public TopicPartitionWriter(TopicPartition tp, IngestClient client,
             @NotNull TopicIngestionProperties ingestionProps,
             @NotNull FabricSinkConfig config,
             boolean isDlqEnabled,
-            @NotNull KafkaRecordErrorReporter errorReporter) {
+            @NotNull KafkaRecordErrorReporter errorReporter,
+            @NotNull MetricRegistry metricRegistry) {
         this.tp = tp;
         this.client = client;
         this.ingestionProps = ingestionProps;
@@ -75,6 +90,7 @@ public class TopicPartitionWriter {
         this.errorReporter = errorReporter;
         this.isDlqEnabled = isDlqEnabled;
         this.fabricSinkConfig = config;
+        this.metricRegistry = metricRegistry;
 
         IntervalFunction sleepConfig = IntervalFunction.ofExponentialRandomBackoff(
                 retryBackOffTime,
@@ -91,6 +107,36 @@ public class TopicPartitionWriter {
                 .retryOnException(ex -> ex instanceof IngestionServiceException && isPermanentException((IngestionServiceException) ex))
                 .maxAttempts(retryAttempts).build();
         this.ingestionRetry = Retry.of("ingestionRetry", retryConfig);
+
+        initializeMetrics(tp.topic(), metricRegistry);
+    }
+    private void initializeMetrics(String topic, MetricRegistry metricRegistry) {
+        this.fileCountOnIngestion = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, FabricKafkaMetricsUtil.FILE_COUNT_ON_INGESTION));
+        this.fileCountTableStageIngestionFail = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, FabricKafkaMetricsUtil.FILE_COUNT_TABLE_STAGE_INGESTION_FAIL));
+        this.ingestionErrorCount = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.DLQ_SUB_DOMAIN, FabricKafkaMetricsUtil.INGESTION_ERROR_COUNT));
+        this.ingestionSuccessCount = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.DLQ_SUB_DOMAIN, FabricKafkaMetricsUtil.INGESTION_SUCCESS_COUNT));
+        this.commitLag = metricRegistry.timer(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.LATENCY_SUB_DOMAIN, FabricKafkaMetricsUtil.EventType.COMMIT_LAG.getMetricName()));
+        this.ingestionLag = metricRegistry.timer(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.LATENCY_SUB_DOMAIN, FabricKafkaMetricsUtil.EventType.INGESTION_LAG.getMetricName()));
+        
+        String processedOffsetMetricName = FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.OFFSET_SUB_DOMAIN, FabricKafkaMetricsUtil.PROCESSED_OFFSET);
+        if (!metricRegistry.getGauges().containsKey(processedOffsetMetricName)) {
+            metricRegistry.register(processedOffsetMetricName, new Gauge<Long>() {
+                @Override
+                public Long getValue() {
+                    return currentOffset;
+                }
+            });
+        }
+    
+        String committedOffsetMetricName = FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.OFFSET_SUB_DOMAIN, FabricKafkaMetricsUtil.COMMITTED_OFFSET);
+        if (!metricRegistry.getGauges().containsKey(committedOffsetMetricName)) {
+            metricRegistry.register(committedOffsetMetricName, new Gauge<Long>() {
+                @Override
+                public Long getValue() {
+                    return lastCommittedOffset != null ? lastCommittedOffset : 0L;
+                }
+            });
+        }
     }
 
     static @NotNull String getTempDirectoryName(String tempDirPath) {
@@ -101,6 +147,13 @@ public class TopicPartitionWriter {
 
     public void handleRollFile(@NotNull SourceFile fileDescriptor) {
         FileSourceInfo fileSourceInfo = new FileSourceInfo(fileDescriptor.path, fileDescriptor.rawBytes);
+        if (writeTime == 0) {
+            LOGGER.warn("writeTime is not initialized properly before invoking handleRollFile. Setting it to the current time.");
+            writeTime = System.currentTimeMillis(); // Initialize writeTime if not already set
+        }
+        fileCountOnIngestion.inc();
+        long uploadStartTime = System.currentTimeMillis(); // Record the start time of file upload
+        commitLag.update(uploadStartTime - writeTime, TimeUnit.MILLISECONDS);
         /*
          * Since retries can be for a longer duration the Kafka Consumer may leave the group. This will result in a new Consumer reading records from the last
          * committed offset leading to duplication of records in KustoDB. Also, if the error persists, it might also result in duplicate records being written
@@ -112,11 +165,18 @@ public class TopicPartitionWriter {
                     this.lastCommittedOffset = currentOffset;
                     LOGGER.debug("Ingestion status: {} for file {}.Committed offset {} ", ingestionStatusResult,
                             fileDescriptor.path, lastCommittedOffset);
+                    ingestionSuccessCount.inc(); // Increment the ingestion success counter
+                    fileCountOnIngestion.dec(); // Decrement the file count on ingestion counter
+                    long ingestionEndTime = System.currentTimeMillis(); // Record the end time of ingestion
+                    ingestionLag.update(ingestionEndTime - uploadStartTime, TimeUnit.MILLISECONDS); // Update ingestion-lag            
                 })
                 .onFailure(ex -> {
                     if (behaviorOnError != BehaviorOnError.FAIL) {
                         fileDescriptor.records.forEach(sinkRecord -> this.errorReporter.reportError(sinkRecord, new ConnectException(ex)));
                     }
+                    ingestionErrorCount.inc(); // Increment the ingestion error counter
+                    fileCountOnIngestion.dec(); // Decrement the file count on ingestion counter
+                    fileCountTableStageIngestionFail.inc(); // Increment the file count table stage ingestion fail counter
                 });
     }
 
@@ -176,6 +236,7 @@ public class TopicPartitionWriter {
             try (AutoCloseableLock ignored = new AutoCloseableLock(reentrantReadWriteLock.readLock())) {
                 this.currentOffset = sinkRecord.kafkaOffset();
                 fileWriter.writeData(sinkRecord, headerTransforms);
+                writeTime = System.currentTimeMillis();
             } catch (IOException | DataException ex) {
                 handleErrors(sinkRecord, ex);
             }
@@ -203,7 +264,9 @@ public class TopicPartitionWriter {
                 ingestionProps.ingestionProperties.getDataFormat(),
                 behaviorOnError,
                 isDlqEnabled,
-                fabricSinkConfig);
+                fabricSinkConfig,
+                tp.topic(),
+                metricRegistry);
     }
 
     void close() {

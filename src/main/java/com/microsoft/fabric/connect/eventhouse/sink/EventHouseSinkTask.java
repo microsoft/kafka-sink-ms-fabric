@@ -5,6 +5,7 @@ import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -25,6 +26,7 @@ import com.azure.core.credential.TokenRequestContext;
 import com.azure.core.http.ProxyOptions;
 import com.azure.identity.WorkloadIdentityCredential;
 import com.azure.identity.WorkloadIdentityCredentialBuilder;
+import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.microsoft.azure.kusto.data.auth.ConnectionStringBuilder;
 import com.microsoft.azure.kusto.data.http.HttpClientProperties;
@@ -35,6 +37,8 @@ import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.KafkaRecordErrorReporter;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.LegacyErrorReporter;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.NoOpLoggerErrorReporter;
+import com.microsoft.fabric.connect.eventhouse.sink.metrics.FabricKafkaMetricsJmxReporter;
+import com.microsoft.fabric.connect.eventhouse.sink.metrics.FabricKafkaMetricsUtil;
 
 /**
  * Kusto sink uses file system to buffer records.
@@ -43,6 +47,7 @@ import com.microsoft.fabric.connect.eventhouse.sink.dlq.NoOpLoggerErrorReporter;
  * advance the offset according to it.
  */
 public class EventHouseSinkTask extends SinkTask {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(EventHouseSinkTask.class);
     private final Set<TopicPartition> assignment;
     protected IngestClient kustoIngestClient;
@@ -52,6 +57,8 @@ public class EventHouseSinkTask extends SinkTask {
     private HeaderTransforms headerTransforms;
     private FabricSinkConfig config;
     private boolean isDlqEnabled;
+    private MetricRegistry metricRegistry;
+    private FabricKafkaMetricsJmxReporter jmxReporter;
 
     public EventHouseSinkTask() {
         assignment = new HashSet<>();
@@ -194,7 +201,7 @@ public class EventHouseSinkTask extends SinkTask {
             } else {
                 IngestClient client = ingestionProps.streaming ? streamingIngestClient : kustoIngestClient;
                 TopicPartitionWriter writer = new TopicPartitionWriter(tp, client, ingestionProps, config, isDlqEnabled,
-                        createKafkaRecordErrorReporter());
+                        createKafkaRecordErrorReporter(), metricRegistry);
                 writer.open();
                 writers.put(tp, writer);
             }
@@ -238,11 +245,32 @@ public class EventHouseSinkTask extends SinkTask {
         if (context != null) {
             open(context.assignment());
         }
+
+        // Initialize metricRegistry and JmxReporter
+        metricRegistry = new MetricRegistry();
+        jmxReporter = new FabricKafkaMetricsJmxReporter(metricRegistry, "EventHouseSinkConnector");
+        jmxReporter.start();
+        LOGGER.info("JmxReporter started for EventHouseSinkConnector");
+
+        // Register metrics
+        if (context != null) {
+            for (TopicPartition tp : context.assignment()) {
+                metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(
+                    tp.topic(), FabricKafkaMetricsUtil.DLQ_SUB_DOMAIN, FabricKafkaMetricsUtil.DLQ_RECORD_COUNT));
+                metricRegistry.timer(FabricKafkaMetricsUtil.constructMetricName(
+                    tp.topic(), FabricKafkaMetricsUtil.LATENCY_SUB_DOMAIN, FabricKafkaMetricsUtil.EventType.KAFKA_LAG.getMetricName()));           
+            }
+        }
     }
 
     @Override
     public void stop() {
         LOGGER.warn("Stopping KustoSinkTask");
+        // Unregister metrics
+        if (jmxReporter != null) {
+            jmxReporter.removeMetricsFromRegistry("EventHouseSinkConnector");
+            jmxReporter.stop();
+        }
         // First stop so that no more ingestion trigger from timer flushes
         for (TopicPartitionWriter writer : writers.values()) {
             writer.stop();
@@ -285,6 +313,13 @@ public class EventHouseSinkTask extends SinkTask {
                 LOGGER.warn("Error parsing HeaderTransforms field: ", e);
             }
             writer.writeRecord(sinkRecord, headerTransforms);
+            Long timestamp = sinkRecord.timestamp();
+            if (timestamp != null) {
+                long kafkaLagValue = System.currentTimeMillis() - timestamp;
+                metricRegistry.timer(FabricKafkaMetricsUtil.constructMetricName(
+                    sinkRecord.topic(), FabricKafkaMetricsUtil.LATENCY_SUB_DOMAIN, FabricKafkaMetricsUtil.EventType.KAFKA_LAG.getMetricName()))
+                    .update(kafkaLagValue, TimeUnit.MILLISECONDS);
+            }
         }
         if (lastRecord != null) {
             LOGGER.debug("Last record offset: {}", lastRecord.kafkaOffset());
@@ -330,6 +365,8 @@ public class EventHouseSinkTask extends SinkTask {
                                     sinkRecord.kafkaOffset(),
                                     sinkRecord.kafkaPartition());
                             errantRecordReporter.report(sinkRecord, error).get();
+                            metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(
+                                sinkRecord.topic(), FabricKafkaMetricsUtil.DLQ_SUB_DOMAIN, FabricKafkaMetricsUtil.DLQ_RECORD_COUNT)).inc(); // Increment the DLQ record count counter
                         } catch (InterruptedException | ExecutionException e) {
                             final String errMsg = "ERROR reporting records to ErrantRecordReporter";
                             throw new ConnectException(errMsg, e);
