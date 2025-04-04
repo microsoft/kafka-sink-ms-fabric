@@ -34,7 +34,7 @@ import com.microsoft.azure.kusto.ingest.source.FileSourceInfo;
 import com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig.BehaviorOnError;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.KafkaRecordErrorReporter;
 import com.microsoft.fabric.connect.eventhouse.sink.formatwriter.FormatWriterHelper;
-import com.microsoft.fabric.connect.eventhouse.sink.metrics.KustoKafkaMetricsUtil;
+import com.microsoft.fabric.connect.eventhouse.sink.metrics.FabricKafkaMetricsUtil;
 
 import io.github.resilience4j.core.IntervalFunction;
 import io.github.resilience4j.retry.Retry;
@@ -111,14 +111,14 @@ public class TopicPartitionWriter {
         initializeMetrics(tp.topic(), metricRegistry);
     }
     private void initializeMetrics(String topic, MetricRegistry metricRegistry) {
-        this.fileCountOnIngestion = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(topic, KustoKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, KustoKafkaMetricsUtil.FILE_COUNT_ON_INGESTION));
-        this.fileCountTableStageIngestionFail = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(topic, KustoKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, KustoKafkaMetricsUtil.FILE_COUNT_TABLE_STAGE_INGESTION_FAIL));
-        this.ingestionErrorCount = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(topic, KustoKafkaMetricsUtil.DLQ_SUB_DOMAIN, KustoKafkaMetricsUtil.INGESTION_ERROR_COUNT));
-        this.ingestionSuccessCount = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(topic, KustoKafkaMetricsUtil.DLQ_SUB_DOMAIN, KustoKafkaMetricsUtil.INGESTION_SUCCESS_COUNT));
-        this.commitLag = metricRegistry.timer(KustoKafkaMetricsUtil.constructMetricName(topic, KustoKafkaMetricsUtil.LATENCY_SUB_DOMAIN, KustoKafkaMetricsUtil.EventType.COMMIT_LAG.getMetricName()));
-        this.ingestionLag = metricRegistry.timer(KustoKafkaMetricsUtil.constructMetricName(topic, KustoKafkaMetricsUtil.LATENCY_SUB_DOMAIN, KustoKafkaMetricsUtil.EventType.INGESTION_LAG.getMetricName()));
+        this.fileCountOnIngestion = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, FabricKafkaMetricsUtil.FILE_COUNT_ON_INGESTION));
+        this.fileCountTableStageIngestionFail = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, FabricKafkaMetricsUtil.FILE_COUNT_TABLE_STAGE_INGESTION_FAIL));
+        this.ingestionErrorCount = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.DLQ_SUB_DOMAIN, FabricKafkaMetricsUtil.INGESTION_ERROR_COUNT));
+        this.ingestionSuccessCount = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.DLQ_SUB_DOMAIN, FabricKafkaMetricsUtil.INGESTION_SUCCESS_COUNT));
+        this.commitLag = metricRegistry.timer(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.LATENCY_SUB_DOMAIN, FabricKafkaMetricsUtil.EventType.COMMIT_LAG.getMetricName()));
+        this.ingestionLag = metricRegistry.timer(FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.LATENCY_SUB_DOMAIN, FabricKafkaMetricsUtil.EventType.INGESTION_LAG.getMetricName()));
         
-        String processedOffsetMetricName = KustoKafkaMetricsUtil.constructMetricName(topic, KustoKafkaMetricsUtil.OFFSET_SUB_DOMAIN, KustoKafkaMetricsUtil.PROCESSED_OFFSET);
+        String processedOffsetMetricName = FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.OFFSET_SUB_DOMAIN, FabricKafkaMetricsUtil.PROCESSED_OFFSET);
         if (!metricRegistry.getGauges().containsKey(processedOffsetMetricName)) {
             metricRegistry.register(processedOffsetMetricName, new Gauge<Long>() {
                 @Override
@@ -128,7 +128,7 @@ public class TopicPartitionWriter {
             });
         }
     
-        String committedOffsetMetricName = KustoKafkaMetricsUtil.constructMetricName(topic, KustoKafkaMetricsUtil.OFFSET_SUB_DOMAIN, KustoKafkaMetricsUtil.COMMITTED_OFFSET);
+        String committedOffsetMetricName = FabricKafkaMetricsUtil.constructMetricName(topic, FabricKafkaMetricsUtil.OFFSET_SUB_DOMAIN, FabricKafkaMetricsUtil.COMMITTED_OFFSET);
         if (!metricRegistry.getGauges().containsKey(committedOffsetMetricName)) {
             metricRegistry.register(committedOffsetMetricName, new Gauge<Long>() {
                 @Override

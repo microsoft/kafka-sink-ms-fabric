@@ -28,7 +28,7 @@ import com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig.BehaviorOnE
 import com.microsoft.fabric.connect.eventhouse.sink.format.RecordWriter;
 import com.microsoft.fabric.connect.eventhouse.sink.format.RecordWriterProvider;
 import com.microsoft.fabric.connect.eventhouse.sink.formatwriter.EventHouseRecordWriterProvider;
-import com.microsoft.fabric.connect.eventhouse.sink.metrics.KustoKafkaMetricsUtil;
+import com.microsoft.fabric.connect.eventhouse.sink.metrics.FabricKafkaMetricsUtil;
 
 /**
  * This class is used to write gzipped rolling files.
@@ -110,12 +110,12 @@ public class FileWriter implements Closeable {
     }
 
     private void initializeMetrics(String tpname, MetricRegistry metricRegistry) {
-        this.fileCountOnStage = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, KustoKafkaMetricsUtil.FILE_COUNT_ON_STAGE));
-        this.fileCountPurged = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, KustoKafkaMetricsUtil.FILE_COUNT_PURGED));
-        this.bufferSizeBytes = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.BUFFER_SUB_DOMAIN, KustoKafkaMetricsUtil.BUFFER_SIZE_BYTES));
-        this.bufferRecordCount = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.BUFFER_SUB_DOMAIN, KustoKafkaMetricsUtil.BUFFER_RECORD_COUNT));
-        this.failedTempFileDeletions = metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, KustoKafkaMetricsUtil.FAILED_TEMP_FILE_DELETIONS));
-        String flushedOffsetMetricName = KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.OFFSET_SUB_DOMAIN, KustoKafkaMetricsUtil.FLUSHED_OFFSET);
+        this.fileCountOnStage = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(tpname, FabricKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, FabricKafkaMetricsUtil.FILE_COUNT_ON_STAGE));
+        this.fileCountPurged = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(tpname, FabricKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, FabricKafkaMetricsUtil.FILE_COUNT_PURGED));
+        this.bufferSizeBytes = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(tpname, FabricKafkaMetricsUtil.BUFFER_SUB_DOMAIN, FabricKafkaMetricsUtil.BUFFER_SIZE_BYTES));
+        this.bufferRecordCount = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(tpname, FabricKafkaMetricsUtil.BUFFER_SUB_DOMAIN, FabricKafkaMetricsUtil.BUFFER_RECORD_COUNT));
+        this.failedTempFileDeletions = metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(tpname, FabricKafkaMetricsUtil.FILE_COUNT_SUB_DOMAIN, FabricKafkaMetricsUtil.FAILED_TEMP_FILE_DELETIONS));
+        String flushedOffsetMetricName = FabricKafkaMetricsUtil.constructMetricName(tpname, FabricKafkaMetricsUtil.OFFSET_SUB_DOMAIN, FabricKafkaMetricsUtil.FLUSHED_OFFSET);
         if (!metricRegistry.getGauges().containsKey(flushedOffsetMetricName)) {
             metricRegistry.register(flushedOffsetMetricName, new Gauge<Long>() {
                 @Override
@@ -125,7 +125,7 @@ public class FileWriter implements Closeable {
             });
         }
     
-        String purgedOffsetMetricName = KustoKafkaMetricsUtil.constructMetricName(tpname, KustoKafkaMetricsUtil.OFFSET_SUB_DOMAIN, KustoKafkaMetricsUtil.PURGED_OFFSET);
+        String purgedOffsetMetricName = FabricKafkaMetricsUtil.constructMetricName(tpname, FabricKafkaMetricsUtil.OFFSET_SUB_DOMAIN, FabricKafkaMetricsUtil.PURGED_OFFSET);
         if (!metricRegistry.getGauges().containsKey(purgedOffsetMetricName)) {
             metricRegistry.register(purgedOffsetMetricName, new Gauge<Long>() {
                 @Override

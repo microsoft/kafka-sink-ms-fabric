@@ -1,7 +1,7 @@
 package com.microsoft.fabric.connect.eventhouse.sink.metrics;
 
 /** All metrics related constants. Mainly for JMX */
-public class KustoKafkaMetricsUtil {
+public class FabricKafkaMetricsUtil {
   public static final String JMX_METRIC_PREFIX = "fabric.kafka.connector";
 
   public static final String DLQ_SUB_DOMAIN = "dlq-metrics";
@@ -32,10 +32,10 @@ public class KustoKafkaMetricsUtil {
   // Event Latency related constants
   public static final String LATENCY_SUB_DOMAIN = "latencies";
 
-  private KustoKafkaMetricsUtil() {
+  private FabricKafkaMetricsUtil() {
     throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
   }
-  
+
   public enum EventType {
     KAFKA_LAG("kafka-lag"),
     COMMIT_LAG("commit-lag"),

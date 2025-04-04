@@ -37,8 +37,8 @@ import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.KafkaRecordErrorReporter;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.LegacyErrorReporter;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.NoOpLoggerErrorReporter;
-import com.microsoft.fabric.connect.eventhouse.sink.metrics.KustoKafkaMetricsJmxReporter;
-import com.microsoft.fabric.connect.eventhouse.sink.metrics.KustoKafkaMetricsUtil;
+import com.microsoft.fabric.connect.eventhouse.sink.metrics.FabricKafkaMetricsJmxReporter;
+import com.microsoft.fabric.connect.eventhouse.sink.metrics.FabricKafkaMetricsUtil;
 
 /**
  * Kusto sink uses file system to buffer records.
@@ -58,7 +58,7 @@ public class EventHouseSinkTask extends SinkTask {
     private FabricSinkConfig config;
     private boolean isDlqEnabled;
     private MetricRegistry metricRegistry;
-    private KustoKafkaMetricsJmxReporter jmxReporter;
+    private FabricKafkaMetricsJmxReporter jmxReporter;
 
     public EventHouseSinkTask() {
         assignment = new HashSet<>();
@@ -248,17 +248,17 @@ public class EventHouseSinkTask extends SinkTask {
 
         // Initialize metricRegistry and JmxReporter
         metricRegistry = new MetricRegistry();
-        jmxReporter = new KustoKafkaMetricsJmxReporter(metricRegistry, "EventHouseSinkConnector");
+        jmxReporter = new FabricKafkaMetricsJmxReporter(metricRegistry, "EventHouseSinkConnector");
         jmxReporter.start();
         LOGGER.info("JmxReporter started for EventHouseSinkConnector");
 
         // Register metrics
         if (context != null) {
             for (TopicPartition tp : context.assignment()) {
-                metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(
-                    tp.topic(), KustoKafkaMetricsUtil.DLQ_SUB_DOMAIN, KustoKafkaMetricsUtil.DLQ_RECORD_COUNT));
-                metricRegistry.timer(KustoKafkaMetricsUtil.constructMetricName(
-                    tp.topic(), KustoKafkaMetricsUtil.LATENCY_SUB_DOMAIN, KustoKafkaMetricsUtil.EventType.KAFKA_LAG.getMetricName()));           
+                metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(
+                    tp.topic(), FabricKafkaMetricsUtil.DLQ_SUB_DOMAIN, FabricKafkaMetricsUtil.DLQ_RECORD_COUNT));
+                metricRegistry.timer(FabricKafkaMetricsUtil.constructMetricName(
+                    tp.topic(), FabricKafkaMetricsUtil.LATENCY_SUB_DOMAIN, FabricKafkaMetricsUtil.EventType.KAFKA_LAG.getMetricName()));           
             }
         }
     }
@@ -316,8 +316,8 @@ public class EventHouseSinkTask extends SinkTask {
             Long timestamp = sinkRecord.timestamp();
             if (timestamp != null) {
                 long kafkaLagValue = System.currentTimeMillis() - timestamp;
-                metricRegistry.timer(KustoKafkaMetricsUtil.constructMetricName(
-                    sinkRecord.topic(), KustoKafkaMetricsUtil.LATENCY_SUB_DOMAIN, KustoKafkaMetricsUtil.EventType.KAFKA_LAG.getMetricName()))
+                metricRegistry.timer(FabricKafkaMetricsUtil.constructMetricName(
+                    sinkRecord.topic(), FabricKafkaMetricsUtil.LATENCY_SUB_DOMAIN, FabricKafkaMetricsUtil.EventType.KAFKA_LAG.getMetricName()))
                     .update(kafkaLagValue, TimeUnit.MILLISECONDS);
             }
         }
@@ -365,8 +365,8 @@ public class EventHouseSinkTask extends SinkTask {
                                     sinkRecord.kafkaOffset(),
                                     sinkRecord.kafkaPartition());
                             errantRecordReporter.report(sinkRecord, error).get();
-                            metricRegistry.counter(KustoKafkaMetricsUtil.constructMetricName(
-                                sinkRecord.topic(), KustoKafkaMetricsUtil.DLQ_SUB_DOMAIN, KustoKafkaMetricsUtil.DLQ_RECORD_COUNT)).inc(); // Increment the DLQ record count counter
+                            metricRegistry.counter(FabricKafkaMetricsUtil.constructMetricName(
+                                sinkRecord.topic(), FabricKafkaMetricsUtil.DLQ_SUB_DOMAIN, FabricKafkaMetricsUtil.DLQ_RECORD_COUNT)).inc(); // Increment the DLQ record count counter
                         } catch (InterruptedException | ExecutionException e) {
                             final String errMsg = "ERROR reporting records to ErrantRecordReporter";
                             throw new ConnectException(errMsg, e);

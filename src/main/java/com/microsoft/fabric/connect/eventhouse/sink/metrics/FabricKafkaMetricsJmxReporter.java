@@ -15,7 +15,7 @@ import com.codahale.metrics.jmx.JmxReporter;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
 
-import static com.microsoft.fabric.connect.eventhouse.sink.metrics.KustoKafkaMetricsUtil.JMX_METRIC_PREFIX;
+import static com.microsoft.fabric.connect.eventhouse.sink.metrics.FabricKafkaMetricsUtil.JMX_METRIC_PREFIX;
 
 /**
  * Helper class for creation of JMX Metrics from metrics registry, also includes a definition to
@@ -24,19 +24,19 @@ import static com.microsoft.fabric.connect.eventhouse.sink.metrics.KustoKafkaMet
  * <p>This instance is separate for all pipes and hence registration and unregistration of metrics
  * is handled per pipe level.
  */
-public class KustoKafkaMetricsJmxReporter {
-  private static final Logger LOGGER = LoggerFactory.getLogger(KustoKafkaMetricsJmxReporter.class);
+public class FabricKafkaMetricsJmxReporter {
+  private static final Logger LOGGER = LoggerFactory.getLogger(FabricKafkaMetricsJmxReporter.class);
 
   // The registry which will hold pool of all metrics for this instance
   private final MetricRegistry metricRegistry;
 
   /**
    * Wrapper on top of listeners and metricRegistry for codehale. This will be useful to start the
-   * jmx metrics when time is appropriate. (Check {@link KustoKafkaMetricsJmxReporter#start()})
+   * jmx metrics when time is appropriate. (Check {@link FabricKafkaMetricsJmxReporter#start()})
    */
   private final JmxReporter jmxReporter;
 
-  public KustoKafkaMetricsJmxReporter(MetricRegistry metricRegistry, final String connectorName) {
+  public FabricKafkaMetricsJmxReporter(MetricRegistry metricRegistry, final String connectorName) {
     this.metricRegistry = metricRegistry;
     this.jmxReporter = createJMXReporter(connectorName);
   }
@@ -67,7 +67,7 @@ public class KustoKafkaMetricsJmxReporter {
    * @param connectorName name of the connector. (From Config)
    * @param jmxDomain JMX Domain
    * @param metricName metric name used while registering the metric. (Check {@link
-   *     KustoKafkaMetricsUtil#constructMetricName(String, String, String)})
+   *     FabricKafkaMetricsUtil#constructMetricName(String, String, String)})
    * @return Object Name constructed from above three args
    */
   @VisibleForTesting
@@ -117,7 +117,7 @@ public class KustoKafkaMetricsJmxReporter {
    * here: @see <a href="https://metrics.dropwizard.io/4.2.0/getting-started.html">DropWizard</a>
    *
    * <p>We will convert all duration to SECONDS and prefix our metrics with {@link
-   * KustoKafkaMetricsUtil#JMX_METRIC_PREFIX}
+   * FabricKafkaMetricsUtil#JMX_METRIC_PREFIX}
    *
    * @param connectorName connectorName passed inside configuration
    * @return JMXReporter instance.
