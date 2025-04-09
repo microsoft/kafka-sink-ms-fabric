@@ -61,9 +61,9 @@
                                     <shadedPattern>${kusto.shade.prefix}.com.microsoft.kusto</shadedPattern>
                                     <excludes>
                                         <exclude>com.microsoft.fabric.connect.eventhouse.sink.*</exclude>
-                                        <exclude>com.microsoft.fabric.connect.eventhouse.sink.dlq*</exclude>
-                                        <exclude>com.microsoft.fabric.connect.eventhouse.sink.format*</exclude>
-                                        <exclude>com.microsoft.fabric.connect.eventhouse.sink.formatwriter*</exclude>
+                                        <exclude>com.microsoft.fabric.connect.eventhouse.sink.dlq.*</exclude>
+                                        <exclude>com.microsoft.fabric.connect.eventhouse.sink.format.*</exclude>
+                                        <exclude>com.microsoft.fabric.connect.eventhouse.sink.formatwriter.*</exclude>
                                     </excludes>
                                 </relocation>
                                 <relocation>
