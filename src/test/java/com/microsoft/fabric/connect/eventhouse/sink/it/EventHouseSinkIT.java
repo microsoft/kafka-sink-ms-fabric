@@ -532,11 +532,6 @@ class EventHouseSinkIT {
                 Map<Object, String> actualResults = new HashMap<>();
                 while (resultSet.next()) {
                     Object keyObject = resultSet.getObject(KEY_COLUMN);
-                    if(Objects.isNull(keyObject)){
-                        LOGGER.warn("Key column {} is null for record: {}", KEY_COLUMN, resultSet.getString("vresult"));
-                        LOGGER.warn("Key column was null while executing query {} ", query);
-                        continue;
-                    }
                     Object key = keyObject instanceof Number ? Long.parseLong(keyObject.toString()) : keyObject.toString();
                     String vResult = resultSet.getString("vresult");
                     LOGGER.debug("Record queried from DB: {}", vResult);
