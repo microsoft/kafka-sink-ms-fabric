@@ -234,11 +234,11 @@ class EventHouseSinkIT {
             valueFormat = AvroConverter.class.getName();
             LOGGER.debug("Using value format: {}", valueFormat);
         }
-        // There are tests for CSV streaming. The other formats test for Queued ingestion
+        // There are tests for CSV Queued. The other formats test for Streaming ingestion
         String topicTableMapping = dataFormat.equals("csv")
-                ? String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'csv_mapping','streaming':'true'}]",
+                ? String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'csv_mapping'}]",
                         dataFormat, coordinates.database, coordinates.table, dataFormat)
-                : String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'data_mapping'}]", dataFormat,
+                : String.format("[{'topic': 'e2e.%s.topic','db': '%s', 'table': '%s','format':'%s','mapping':'data_mapping','streaming':'true'}]", dataFormat,
                         coordinates.database,
                         coordinates.table, dataFormat);
         if (dataFormat.startsWith("bytes")) {
@@ -341,8 +341,9 @@ class EventHouseSinkIT {
                         genericRecord.put("vtype", "csv");
                         Map<String, Object> jsonRecordMap = new TreeMap<>(genericRecord.getSchema().getFields().stream().parallel()
                                 .collect(Collectors.toMap(Schema.Field::name, field -> genericRecord.get(field.name()))));
+                        LOGGER.info("JSON CSV Record produced: {}", jsonRecordMap);
                         String objectsCommaSeparated = jsonRecordMap.values().stream().map(Object::toString).collect(Collectors.joining(","));
-                        LOGGER.debug("CSV Record produced: {}", objectsCommaSeparated);
+                        LOGGER.info("CSV Record produced: {}", objectsCommaSeparated);
                         List<Header> headers = new ArrayList<>();
                         headers.add(new RecordHeader("Iteration", (dataFormat + "-Header" + i).getBytes()));
                         ProducerRecord<String, String> producerRecord = new ProducerRecord<>(targetTopic, 0, "Key-" + i,

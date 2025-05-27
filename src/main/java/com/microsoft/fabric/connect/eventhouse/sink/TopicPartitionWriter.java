@@ -100,7 +100,8 @@ public class TopicPartitionWriter {
     }
 
     public void handleRollFile(@NotNull SourceFile fileDescriptor) {
-        FileSourceInfo fileSourceInfo = new FileSourceInfo(fileDescriptor.path, fileDescriptor.rawBytes);
+        UUID fileSourceId = UUID.randomUUID();
+        FileSourceInfo fileSourceInfo = new FileSourceInfo(fileDescriptor.path, fileSourceId);
         /*
          * Since retries can be for a longer duration the Kafka Consumer may leave the group. This will result in a new Consumer reading records from the last
          * committed offset leading to duplication of records in KustoDB. Also, if the error persists, it might also result in duplicate records being written
@@ -110,8 +111,8 @@ public class TopicPartitionWriter {
         this.ingestionRetry.executeTrySupplier(() -> Try.of(() -> this.client.ingestFromFile(fileSourceInfo, updateIngestionPropertiesWithTargetFormat())))
                 .onSuccess(ingestionStatusResult -> {
                     this.lastCommittedOffset = currentOffset;
-                    LOGGER.debug("Ingestion status: {} for file {}.Committed offset {} ", ingestionStatusResult,
-                            fileDescriptor.path, lastCommittedOffset);
+                    LOGGER.debug("Ingestion status: {} for file {} with ID {} .Committed offset {} ", ingestionStatusResult,
+                            fileDescriptor.path, fileSourceId, lastCommittedOffset);
                 })
                 .onFailure(ex -> {
                     if (behaviorOnError != BehaviorOnError.FAIL) {
