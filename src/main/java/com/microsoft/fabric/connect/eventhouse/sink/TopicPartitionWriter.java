@@ -112,7 +112,7 @@ public class TopicPartitionWriter {
                 .onSuccess(ingestionStatusResult -> {
                     this.lastCommittedOffset = currentOffset;
                     LOGGER.debug("Ingestion status: {} for file {} with ID {} .Committed offset {} ", ingestionStatusResult,
-                            fileDescriptor.path, fileSourceId.toString(), lastCommittedOffset);
+                            fileDescriptor.path, fileSourceId, lastCommittedOffset);
                 })
                 .onFailure(ex -> {
                     if (behaviorOnError != BehaviorOnError.FAIL) {
