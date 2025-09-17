@@ -102,7 +102,7 @@ public class FileWriter implements Closeable {
         File folder = new File(basePath);
         if (!folder.exists() && !folder.mkdirs()) {
             if (!folder.exists()) {
-                throw new IOException(String.format("Failed to create new directory %s", folder.getPath()));
+                throw new IOException("Failed to create new directory %s".formatted(folder.getPath()));
             }
             LOGGER.warn("Couldn't create the directory because it already exists (likely a race condition)");
         }
@@ -276,7 +276,7 @@ public class FileWriter implements Closeable {
         } catch (Exception e) {
             String fileName = currentFile == null ? "[no file created yet]" : currentFile.file.getName();
             long currentSize = currentFile == null ? 0 : currentFile.rawBytes;
-            flushError = String.format("Error in flushByTime. Current file: %s, size: %d. ", fileName, currentSize);
+            flushError = "Error in flushByTime. Current file: %s, size: %d. ".formatted(fileName, currentSize);
             LOGGER.error(flushError, e);
         }
     }
@@ -327,8 +327,7 @@ public class FileWriter implements Closeable {
                 shouldWriteAvroAsBytes = true;
             }
         } else {
-            throw new ConnectException(String.format(
-                    "Invalid Kafka record format, connector does not support %s format. This connector supports Avro, Json with schema, Json without schema, Byte, String format. ",
+            throw new ConnectException("Invalid Kafka record format, connector does not support %s format. This connector supports Avro, Json with schema, Json without schema, Byte, String format. ".formatted(
                     sinkRecord.valueSchema().type()));
         }
     }

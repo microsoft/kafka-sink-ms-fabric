@@ -229,7 +229,7 @@ class EventHouseSinkTaskTest {
         eventHouseSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
         eventHouseSinkTask.kustoIngestClient = mockClient;
         final List<LoggingEvent> log = appender.getLog();
-        final LoggingEvent firstLogEntry = log.get(0);
+        final LoggingEvent firstLogEntry = log.getFirst();
         assertEquals(firstLogEntry.getLevel().toString(), Level.ERROR.toString());
         assertEquals("Error closing kusto client", firstLogEntry.getMessage());
     }
@@ -257,7 +257,7 @@ class EventHouseSinkTaskTest {
         eventHouseSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
         eventHouseSinkTask.kustoIngestClient = mockClient;
         final List<LoggingEvent> log = appender.getLog();
-        final LoggingEvent firstLogEntry = log.get(0);
+        final LoggingEvent firstLogEntry = log.getFirst();
         assertEquals(firstLogEntry.getLevel().toString(), Level.ERROR.toString());
         assertEquals("Error closing kusto client", firstLogEntry.getMessage());
     }

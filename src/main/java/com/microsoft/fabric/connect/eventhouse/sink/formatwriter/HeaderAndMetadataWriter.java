@@ -70,8 +70,8 @@ public abstract class HeaderAndMetadataWriter {
      */
     public String convertSinkRecordToCsv(@NotNull SinkRecord sinkRecord, boolean isKey) {
         Object value = isKey ? sinkRecord.key() : sinkRecord.value();
-        if (value instanceof byte[]) {
-            return new String((byte[]) value, StandardCharsets.UTF_8);
+        if (value instanceof byte[] bytes) {
+            return new String(bytes, StandardCharsets.UTF_8);
         } else {
             return value == null ? "" : value.toString();
         }
@@ -96,8 +96,7 @@ public abstract class HeaderAndMetadataWriter {
         if (recordValue == null) {
             return Collections.emptyList();
         }
-        if (recordValue instanceof Struct) {
-            Struct recordStruct = (Struct) recordValue;
+        if (recordValue instanceof Struct recordStruct) {
             return Collections.singletonList(FormatWriterHelper.INSTANCE.structToMap(sinkRecord.topic(), recordStruct, isKey));
         }
         // Is Avro Data
@@ -115,8 +114,8 @@ public abstract class HeaderAndMetadataWriter {
         }
         // is a byte array
         if (FormatWriterHelper.INSTANCE.isSchemaFormat(dataFormat)) {
-            if (recordValue instanceof byte[]) {
-                return FormatWriterHelper.INSTANCE.convertBytesToMap((byte[]) recordValue, defaultKeyOrValueField, dataFormat);
+            if (recordValue instanceof byte[] bytes) {
+                return FormatWriterHelper.INSTANCE.convertBytesToMap(bytes, defaultKeyOrValueField, dataFormat);
             } else {
                 String fieldName = isKey ? KEY_FIELD : VALUE_FIELD;
                 return Collections.singletonList(Collections.singletonMap(fieldName, recordValue));

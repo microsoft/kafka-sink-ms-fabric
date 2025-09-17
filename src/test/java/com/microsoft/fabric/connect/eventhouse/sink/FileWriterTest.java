@@ -1,7 +1,7 @@
 package com.microsoft.fabric.connect.eventhouse.sink;
 
 import java.io.*;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
@@ -82,10 +82,10 @@ class FileWriterTest {
 
     @Test
     void testOpen() throws IOException {
-        String path = Paths.get(currentDirectory.getPath(), "testWriterOpen").toString();
+        String path = Path.of(currentDirectory.getPath(), "testWriterOpen").toString();
         Assertions.assertTrue(createDirectoryWithPermissions(path));
         Assertions.assertEquals(0, getFilesCount(path));
-        final String FILE_PATH = Paths.get(path, "ABC").toString();
+        final String FILE_PATH = Path.of(path, "ABC").toString();
         final int MAX_FILE_SIZE = 128;
         Consumer<SourceFile> trackFiles = (SourceFile f) -> {
         };
@@ -117,19 +117,19 @@ class FileWriterTest {
 
     @Test
     void testGzipFileWriter() throws IOException {
-        String path = Paths.get(currentDirectory.getPath(), "testGzipFileWriter").toString();
+        String path = Path.of(currentDirectory.getPath(), "testGzipFileWriter").toString();
         Assertions.assertTrue(createDirectoryWithPermissions(path));
         Assertions.assertEquals(0, getFilesCount(path));
         HashMap<String, Long> files = new HashMap<>();
         final int MAX_FILE_SIZE = 225; // sizeof(,'','','{"partition":"1","offset":"1","topic":"topic"}'\n) * 2 , Similar multiple applied for the first test
         Consumer<SourceFile> trackFiles = (SourceFile f) -> files.put(f.path, f.rawBytes);
-        Function<Long, String> generateFileName = (Long l) -> Paths.get(path, String.valueOf(java.util.UUID.randomUUID())) + "csv.gz";
+        Function<Long, String> generateFileName = (Long l) -> Path.of(path, String.valueOf(java.util.UUID.randomUUID())) + "csv.gz";
         EventHouseRecordWriter eventHouseRecordWriter = new EventHouseRecordWriter(path, NullOutputStream.INSTANCE, FABRIC_SINK_CONFIG);
         try (FileWriter fileWriter = new FileWriter(path, MAX_FILE_SIZE, trackFiles, generateFileName, 30000,
                 new ReentrantReadWriteLock(),
                 ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG)) {
             for (int i = 0; i < 9; i++) {
-                String msg = String.format("Line number %d : This is a message from the other size", i);
+                String msg = "Line number %d : This is a message from the other size".formatted(i);
                 SinkRecord record1 = new SinkRecord("topic", 1, null, null,
                         Schema.BYTES_SCHEMA, msg.getBytes(), 10);
                 record1.headers().addString("projectHeader1", "projectHeaderValue1");
@@ -161,12 +161,12 @@ class FileWriterTest {
 
     @Test
     void testGzipFileWriterFlush() throws IOException {
-        String path = Paths.get(currentDirectory.getPath(), "testGzipFileWriter2").toString();
+        String path = Path.of(currentDirectory.getPath(), "testGzipFileWriter2").toString();
         Assertions.assertTrue(createDirectoryWithPermissions(path));
         HashMap<String, Long> files = new HashMap<>();
         final int MAX_FILE_SIZE = 128 * 2;
         Consumer<SourceFile> trackFiles = (SourceFile f) -> files.put(f.path, f.rawBytes);
-        Function<Long, String> generateFileName = (Long l) -> Paths.get(path, java.util.UUID.randomUUID().toString()) + "csv.gz";
+        Function<Long, String> generateFileName = (Long l) -> Path.of(path, java.util.UUID.randomUUID().toString()) + "csv.gz";
         // Expect no files to be ingested as size is small and flushInterval is big
         FileWriter fileWriter = new FileWriter(path, MAX_FILE_SIZE, trackFiles, generateFileName, 30000, new ReentrantReadWriteLock(),
                 ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG);
@@ -178,9 +178,9 @@ class FileWriterTest {
         fileWriter.stop();
         Assertions.assertEquals(1, files.size());
 
-        String path2 = Paths.get(currentDirectory.getPath(), "testGzipFileWriter2_2").toString();
+        String path2 = Path.of(currentDirectory.getPath(), "testGzipFileWriter2_2").toString();
         Assertions.assertTrue(createDirectoryWithPermissions(path2));
-        Function<Long, String> generateFileName2 = (Long l) -> Paths.get(path2, java.util.UUID.randomUUID().toString()).toString();
+        Function<Long, String> generateFileName2 = (Long l) -> Path.of(path2, java.util.UUID.randomUUID().toString()).toString();
         // Expect one file to be ingested as flushInterval had changed and is shorter than sleep time
         FileWriter fileWriter2 = new FileWriter(path2, MAX_FILE_SIZE, trackFiles, generateFileName2, 1000, new ReentrantReadWriteLock(),
                 ingestionProps.getDataFormat(), BehaviorOnError.FAIL, true, FABRIC_SINK_CONFIG);
@@ -215,13 +215,13 @@ class FileWriterTest {
             committedOffsets.add(offsets.currentOffset);
             files.add(new AbstractMap.SimpleEntry<>(f.path, f.rawBytes));
         };
-        String path = Paths.get(currentDirectory.getPath(), "offsetCheckByInterval").toString();
+        String path = Path.of(currentDirectory.getPath(), "offsetCheckByInterval").toString();
         Assertions.assertTrue(createDirectoryWithPermissions(path));
         Function<Long, String> generateFileName = (Long offset) -> {
             if (offset == null) {
                 offset = offsets.currentOffset;
             }
-            return Paths.get(path, Long.toString(offset)).toString();
+            return Path.of(path, Long.toString(offset)).toString();
         };
         try (FileWriter fileWriter2 = new FileWriter(path, MAX_FILE_SIZE, trackFiles, generateFileName, 500,
                 reentrantReadWriteLock,

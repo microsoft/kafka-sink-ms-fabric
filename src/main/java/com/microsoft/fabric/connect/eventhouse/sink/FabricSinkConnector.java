@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.lang3.NotImplementedException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -51,7 +50,7 @@ public class FabricSinkConnector extends SinkConnector {
         if (config.getFabricTarget() == FabricSinkConfig.FabricTarget.EVENTHOUSE) {
             return EventHouseSinkTask.class;
         } else {
-            throw new NotImplementedException("EventStream fabric target not implemented.");
+            throw new IllegalArgumentException("EventStream fabric target not implemented.");
         }
     }
 

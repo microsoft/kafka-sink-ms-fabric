@@ -2,7 +2,7 @@ package com.microsoft.fabric.connect.eventhouse.sink;
 
 import java.util.Objects;
 
-import org.apache.commons.lang3.StringUtils;
+import com.microsoft.azure.kusto.data.StringUtils;
 import org.apache.kafka.common.config.ConfigException;
 
 public class TopicToTableMapping {
@@ -77,7 +77,7 @@ public class TopicToTableMapping {
     }
 
     public boolean isDynamicPayload() {
-        return StringUtils.isNotEmpty(dynamicPayload) && "TRUE".equalsIgnoreCase(dynamicPayload); // well, you pass true as a string
+        return StringUtils.isNotBlank(dynamicPayload) && "TRUE".equalsIgnoreCase(dynamicPayload); // well, you pass true as a string
     }
 
     public void setDynamicPayload(String dynamicPayload) {
