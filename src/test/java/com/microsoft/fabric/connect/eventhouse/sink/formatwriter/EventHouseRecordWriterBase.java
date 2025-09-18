@@ -2,7 +2,7 @@ package com.microsoft.fabric.connect.eventhouse.sink.formatwriter;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -38,11 +38,11 @@ public abstract class EventHouseRecordWriterBase {
     public HeaderTransforms headerTransforms() throws JsonProcessingException {
         CollectionType resultType = TypeFactory.defaultInstance().constructCollectionType(Set.class, String.class);
         String projectHeaders = "[" + IntStream.range(0, 10)
-                .mapToObj(i -> new String[] {String.format("'HeaderInt-%d'", i), String.format("'HeaderBytes-%d'", i)})
+                .mapToObj(i -> new String[] {"'HeaderInt-%d'".formatted(i), "'HeaderBytes-%d'".formatted(i)})
                 .flatMap(Arrays::stream)
                 .collect(Collectors.joining(", ")) + "]";
         String dropHeaders = "[" + IntStream.range(0, 10)
-                .mapToObj(i -> String.format("'DropInt-%d'", i))
+                .mapToObj(i -> "'DropInt-%d'".formatted(i))
                 .collect(Collectors.joining(", ")) + "]";
 
         Set<String> headersToProject = RESULT_MAPPER.readValue(projectHeaders, resultType);
@@ -52,7 +52,7 @@ public abstract class EventHouseRecordWriterBase {
 
     protected void validate(String actualFilePath, Map<Integer, String[]> expectedResultsMap) throws IOException, JSONException {
         // Warns if the types are not generified
-        List<String> actualJson = Files.readAllLines(Paths.get(actualFilePath));
+        List<String> actualJson = Files.readAllLines(Path.of(actualFilePath));
         for (int i = 0; i < actualJson.size(); i++) {
             String actual = actualJson.get(i);
             Map<String, Object> actualMap = RESULT_MAPPER.readValue(actual, GENERIC_MAP);

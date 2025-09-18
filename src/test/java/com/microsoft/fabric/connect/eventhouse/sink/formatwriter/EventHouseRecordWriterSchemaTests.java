@@ -27,7 +27,7 @@ import com.microsoft.fabric.connect.eventhouse.sink.format.RecordWriter;
 
 import io.confluent.avro.random.generator.Generator;
 import io.confluent.connect.avro.AvroData;
-import tech.allegro.schema.json2avro.converter.JsonAvroConverter;
+import tech.allegro.schema.json2avro.converter.AvroJsonConverter;
 
 class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
     private static @NotNull Stream<Arguments> testMapSchemaJson() {
@@ -67,13 +67,13 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
             throws IOException, JSONException, NoSuchAlgorithmException {
         List<SinkRecord> records = new ArrayList<>();
         Generator randomAvroValueData = new Generator.Builder().schemaStream(
-                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", valueSchemaPath)))).build();
+                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream("avro-schemas/%s".formatted(valueSchemaPath)))).build();
         Generator randomAvroKeyData = new Generator.Builder().schemaStream(
-                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", keySchemaPath)))).build();
+                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream("avro-schemas/%s".formatted(keySchemaPath)))).build();
         AvroData avroDataCache = new AvroData(50);
         Schema keySchema = avroDataCache.toConnectSchema(randomAvroKeyData.schema());
         Schema valueSchema = avroDataCache.toConnectSchema(randomAvroValueData.schema());
-        JsonAvroConverter converter = new JsonAvroConverter();
+        AvroJsonConverter converter = new AvroJsonConverter();
         Map<Integer, String[]> expectedResultsMap = new HashMap<>();
         for (int i = 0; i < 10; i++) {
             Object key = randomAvroKeyData.generate();
@@ -84,23 +84,23 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
                     valueSchema,
                     value,
                     i);
-            sinkRecord.headers().addInt(String.format("HeaderInt-%s", i), i);
-            sinkRecord.headers().addInt(String.format("DropInt-%s", i), i);
+            sinkRecord.headers().addInt("HeaderInt-%s".formatted(i), i);
+            sinkRecord.headers().addInt("DropInt-%s".formatted(i), i);
             byte[] bytesData = new byte[20];
             SecureRandom.getInstanceStrong().nextBytes(bytesData);
-            sinkRecord.headers().addBytes(String.format("HeaderBytes-%s", i), bytesData);
-            sinkRecord.headers().addBytes(String.format("DropBytes-%s", i), bytesData);
+            sinkRecord.headers().addBytes("HeaderBytes-%s".formatted(i), bytesData);
+            sinkRecord.headers().addBytes("DropBytes-%s".formatted(i), bytesData);
             records.add(sinkRecord);
             String expectedValueString = isSimpleValue ? RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value))
                     : new String(converter.convertToJson((GenericData.Record) value));
             String expectedKeyString = isSimpleKey ? key.toString() : new String(converter.convertToJson((GenericData.Record) key));
             Map<String, Object> headerMap = new HashMap<>();
-            headerMap.put(String.format("HeaderInt-%s", i), String.valueOf(i));
-            headerMap.put(String.format("HeaderBytes-%s", i), bytesData);
+            headerMap.put("HeaderInt-%s".formatted(i), String.valueOf(i));
+            headerMap.put("HeaderBytes-%s".formatted(i), bytesData);
             String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(headerMap);
             expectedResultsMap.put(i, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
         }
-        File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
+        File file = new File("%s.%s".formatted(UUID.randomUUID(), "json"));
         Utils.restrictPermissions(file);
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
@@ -125,9 +125,9 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
             throws IOException, JSONException {
         List<SinkRecord> records = new ArrayList<>();
         Generator randomAvroValueData = new Generator.Builder().schemaStream(
-                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", valueSchemaPath)))).build();
+                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream("avro-schemas/%s".formatted(valueSchemaPath)))).build();
         Generator randomAvroKeyData = new Generator.Builder().schemaStream(
-                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream(String.format("avro-schemas/%s", keySchemaPath)))).build();
+                Objects.requireNonNull(this.getClass().getClassLoader().getResourceAsStream("avro-schemas/%s".formatted(keySchemaPath)))).build();
 
         Map<Integer, String[]> expectedResultsMap = new HashMap<>();
         for (int i = 0; i < 10; i++) {
@@ -139,15 +139,15 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
                     null,
                     value,
                     i);
-            sinkRecord.headers().addInt(String.format("HeaderInt-%s", i), i);
+            sinkRecord.headers().addInt("HeaderInt-%s".formatted(i), i);
             records.add(sinkRecord);
 
             String expectedValueString = isSimpleValue ? RESULT_MAPPER.writeValueAsString(Collections.singletonMap("value", value)) : value.toString();
             String expectedKeyString = isSimpleKey ? RESULT_MAPPER.writeValueAsString(key) : key.toString();
-            String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(Collections.singletonMap(String.format("HeaderInt-%s", i), String.valueOf(i)));
+            String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(Collections.singletonMap("HeaderInt-%s".formatted(i), String.valueOf(i)));
             expectedResultsMap.put(i, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
         }
-        File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
+        File file = new File("%s.%s".formatted(UUID.randomUUID(), "json"));
         Utils.restrictPermissions(file);
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());
@@ -174,7 +174,7 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
                 valueSchema,
                 expectedValues,
                 0);
-        sinkRecord.headers().addInt(String.format("HeaderInt-%s", 0), 0);
+        sinkRecord.headers().addInt("HeaderInt-%s".formatted(0), 0);
         String expectedKeyString = isSimpleKey ? RESULT_MAPPER.writeValueAsString(Collections.singletonMap("key", keyValues))
                 : RESULT_MAPPER.writeValueAsString(keyValues);
         // Sometimes the input is a JSON string. No need to double encode. Check the struct test
@@ -189,11 +189,11 @@ class EventHouseRecordWriterSchemaTests extends EventHouseRecordWriterBase {
             expectedValueString = RESULT_MAPPER.writeValueAsString(expectedValues);
         }
         String expectedHeaderJson = RESULT_MAPPER.writeValueAsString(
-                Collections.singletonMap(String.format("HeaderInt-%s", 0), "0"));
+                Collections.singletonMap("HeaderInt-%s".formatted(0), "0"));
         expectedResultsMap.put(0, new String[] {expectedHeaderJson, expectedKeyString, expectedValueString});
 
         // Act
-        File file = new File(String.format("%s.%s", UUID.randomUUID(), "json"));
+        File file = new File("%s.%s".formatted(UUID.randomUUID(), "json"));
         Utils.restrictPermissions(file);
         EventHouseRecordWriterProvider writer = new EventHouseRecordWriterProvider();
         OutputStream out = Files.newOutputStream(file.toPath());

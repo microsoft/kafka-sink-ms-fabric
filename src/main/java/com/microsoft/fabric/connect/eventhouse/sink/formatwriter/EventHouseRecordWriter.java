@@ -123,7 +123,7 @@ public class EventHouseRecordWriter extends HeaderAndMetadataWriter implements R
         String serializedValues = convertSinkRecordToCsv(inSinkRecord, false);
         String serializedHeaders = StringEscapeUtils.escapeCsv(OBJECT_MAPPER.writeValueAsString(parsedHeaders));
         String serializedMetadata = StringEscapeUtils.escapeCsv(OBJECT_MAPPER.writeValueAsString(kafkaMd));
-        String formattedRecord = String.format("%s,%s,%s,%s", serializedValues, serializedKeys,
+        String formattedRecord = "%s,%s,%s,%s".formatted(serializedValues, serializedKeys,
                 serializedHeaders, serializedMetadata);
         LOGGER.trace("Writing record to file: Keys {} , Values {} , Headers {} , OverallRecord {}",
                 serializedKeys, serializedValues, serializedHeaders, formattedRecord);

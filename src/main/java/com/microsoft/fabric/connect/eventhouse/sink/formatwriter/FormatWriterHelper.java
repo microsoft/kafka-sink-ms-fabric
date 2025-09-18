@@ -63,11 +63,11 @@ public enum FormatWriterHelper {
     public @NotNull Map<String, Object> convertAvroRecordToMap(Schema schema, Object value) throws IOException {
         Map<String, Object> updatedValue = new HashMap<>();
         if (value != null) {
-            if (value instanceof NonRecordContainer) {
-                updatedValue.put(schema.name(), ((NonRecordContainer) value).getValue());
+            if (value instanceof NonRecordContainer container) {
+                updatedValue.put(schema.name(), container.getValue());
             } else {
-                if (value instanceof GenericData.Record) {
-                    updatedValue.putAll(avroToJson((GenericData.Record) value));
+                if (value instanceof GenericData.Record record) {
+                    updatedValue.putAll(avroToJson(record));
                 }
             }
         }

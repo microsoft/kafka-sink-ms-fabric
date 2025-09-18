@@ -2,13 +2,13 @@ package com.microsoft.fabric.connect.eventhouse.sink;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import com.microsoft.azure.kusto.data.StringUtils;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
@@ -85,17 +85,27 @@ public class TopicPartitionWriter {
         int retryAttempts = ingestionProps.streaming ? 1 : config.getMaxRetryAttempts();
         RetryConfig retryConfig = RetryConfig.custom().intervalFunction(sleepConfig).retryOnResult(
                 /* Retry the streaming ingest failures */
-                ingestionStatusResult -> ingestionStatusResult instanceof IngestionStatusResult
-                        && !((IngestionStatusResult) ingestionStatusResult).getIngestionStatusCollection().isEmpty()
-                        && hasStreamingIngestionFailed(((IngestionStatusResult) ingestionStatusResult).getIngestionStatusCollection().get(0)))
-                .retryOnException(ex -> ex instanceof IngestionServiceException && isPermanentException((IngestionServiceException) ex))
+                ingestionStatusResult -> {
+                    try {
+                        if (ingestionStatusResult instanceof IngestionStatusResult isr) {
+                            if (!isr.getIngestionStatusCollection().isEmpty()) {
+                                var firstStatus = isr.getIngestionStatusCollection().stream().findFirst().orElse(null);
+                                return firstStatus != null && hasStreamingIngestionFailed(firstStatus);
+                            }
+                        }
+                        return false;
+                    } catch (URISyntaxException e) {
+                        throw new RuntimeException(e);
+                    }
+                })
+                .retryOnException(ex -> ex instanceof IngestionServiceException ise && isPermanentException(ise))
                 .maxAttempts(retryAttempts).build();
         this.ingestionRetry = Retry.of("ingestionRetry", retryConfig);
     }
 
     static @NotNull String getTempDirectoryName(String tempDirPath) {
-        String tempDir = String.format("kusto-sink-connector-%s", UUID.randomUUID());
-        Path path = Paths.get(tempDirPath, tempDir).toAbsolutePath();
+        String tempDir = "kusto-sink-connector-%s".formatted(UUID.randomUUID());
+        Path path = Path.of(tempDirPath, tempDir).toAbsolutePath();
         return path.toString();
     }
 
@@ -123,8 +133,8 @@ public class TopicPartitionWriter {
 
     private static boolean isPermanentException(@NotNull IngestionServiceException exception) {
         Throwable innerException = exception.getCause();
-        return innerException instanceof KustoDataExceptionBase &&
-                (((KustoDataExceptionBase) innerException).isPermanent());
+        return innerException instanceof KustoDataExceptionBase kdeb &&
+                (kdeb.isPermanent());
     }
 
     private boolean hasStreamingIngestionFailed(@NotNull IngestionStatus status) {
@@ -138,16 +148,17 @@ public class TopicPartitionWriter {
                 String failureStatus = status.getFailureStatus();
                 String details = status.getDetails();
                 UUID ingestionSourceId = status.getIngestionSourceId();
-                LOGGER.warn("A batch of streaming records has {} ingestion: table:{}, database:{}, operationId: {}," +
-                        "ingestionSourceId: {}{}{}.\n" +
-                        "Status is final and therefore ingestion won't be retried and data won't reach dlq",
+                LOGGER.warn("""
+                        A batch of streaming records has {} ingestion: table:{}, database:{}, operationId: {},\
+                        ingestionSourceId: {}{}{}.
+                        Status is final and therefore ingestion won't be retried and data won't reach dlq""",
                         status.getStatus(),
                         status.getTable(),
                         status.getDatabase(),
                         status.getOperationId(),
                         ingestionSourceId,
-                        (StringUtils.isNotEmpty(failureStatus) ? (", failure: " + failureStatus) : ""),
-                        (StringUtils.isNotEmpty(details) ? (", details: " + details) : ""));
+                        (StringUtils.isNotBlank(failureStatus) ? (", failure: " + failureStatus) : ""),
+                        (StringUtils.isNotBlank(details) ? (", details: " + details) : ""));
                 return false;
             case Failed:
                 LOGGER.error("A batch of streaming records has failed ingestion: table:{}, database:{}, operationId: {}," +
@@ -168,7 +179,7 @@ public class TopicPartitionWriter {
         offset = offset == null ? currentOffset : offset;
         long nextOffset = fileWriter != null && fileWriter.isDirty() ? offset + 1 : offset;
 
-        return Paths.get(basePath, String.format("kafka_%s_%s_%d.%s%s", tp.topic(), tp.partition(), nextOffset,
+        return Path.of(basePath, "kafka_%s_%s_%d.%s%s".formatted(tp.topic(), tp.partition(), nextOffset,
                 ingestionProps.ingestionProperties.getDataFormat(), COMPRESSION_EXTENSION)).toString();
     }
 
@@ -237,7 +248,7 @@ public class TopicPartitionWriter {
         // Just to make it clear , split the conditional
         if (FormatWriterHelper.INSTANCE.isSchemaFormat(sourceFormat)) {
             IngestionMapping mappingReference = ingestionProps.ingestionProperties.getIngestionMapping();
-            if (mappingReference != null && StringUtils.isNotEmpty(mappingReference.getIngestionMappingReference())) {
+            if (mappingReference != null && StringUtils.isNotBlank(mappingReference.getIngestionMappingReference())) {
                 String ingestionMappingReferenceName = mappingReference.getIngestionMappingReference();
                 updatedIngestionProperties.setIngestionMapping(ingestionMappingReferenceName, IngestionMapping.IngestionMappingKind.JSON);
             }

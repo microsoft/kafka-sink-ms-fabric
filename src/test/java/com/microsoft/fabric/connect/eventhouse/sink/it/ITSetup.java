@@ -3,8 +3,8 @@ package com.microsoft.fabric.connect.eventhouse.sink.it;
 import java.util.Collections;
 import java.util.UUID;
 
+import com.microsoft.azure.kusto.data.StringUtils;
 import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 
 import com.azure.core.credential.AccessToken;
@@ -26,7 +26,7 @@ public class ITSetup {
     }
 
     private static String getAccessToken(String cluster) {
-        String clusterScope = String.format("%s/.default", cluster);
+        String clusterScope = "%s/.default".formatted(cluster);
         TokenRequestContext tokenRequestContext = new TokenRequestContext()
                 .setScopes(Collections.singletonList(clusterScope));
         AccessToken accessTokenObj = new AzureCliCredentialBuilder().build().getTokenSync(tokenRequestContext);

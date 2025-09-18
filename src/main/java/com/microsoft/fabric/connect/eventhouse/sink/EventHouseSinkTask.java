@@ -6,8 +6,7 @@ import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.Pair;
+import com.microsoft.azure.kusto.data.StringUtils;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
@@ -66,7 +65,7 @@ public class EventHouseSinkTask extends SinkTask {
         final ConnectionStringBuilder connectionStringBuilder;
         switch (config.getAuthStrategy()) {
             case APPLICATION:
-                if (StringUtils.isNotEmpty(config.getAuthAppId()) && StringUtils.isNotEmpty(config.getAuthAppKey())) {
+                if (!StringUtils.isEmpty(config.getAuthAppId()) && !StringUtils.isEmpty(config.getAuthAppKey())) {
                     connectionStringBuilder = ConnectionStringBuilder.createWithAadApplicationCredentials(
                             clusterUrl,
                             config.getAuthAppId(),
@@ -75,7 +74,7 @@ public class EventHouseSinkTask extends SinkTask {
                     // This is a special case as the APP ID is part of the ConnectionString.
                     // For all other cases, the auth has to be done with the cluster url and then
                     // adding the auth from the code specifically
-                } else if (StringUtils.isNotEmpty(config.getConnectionString())) {
+                } else if (!StringUtils.isEmpty(config.getConnectionString())) {
                     connectionStringBuilder = new ConnectionStringBuilder(config.getConnectionString());
                 } else {
                     throw new ConfigException("Kusto authentication missing App Key.");
@@ -92,7 +91,7 @@ public class EventHouseSinkTask extends SinkTask {
                         () -> {
                             WorkloadIdentityCredential wic = new WorkloadIdentityCredentialBuilder().build();
                             TokenRequestContext requestContext = new TokenRequestContext();
-                            String clusterScope = String.format("%s/.default", clusterUrl);
+                            String clusterScope = "%s/.default".formatted(clusterUrl);
                             requestContext.setScopes(Collections.singletonList(clusterScope));
                             AccessToken accessToken = wic.getTokenSync(requestContext);
                             if (accessToken != null) {
@@ -117,7 +116,7 @@ public class EventHouseSinkTask extends SinkTask {
         }
 
         connectionStringBuilder.setConnectorDetails(Version.CLIENT_NAME, Version.getConnectorVersion(), Version.APP_NAME,
-                Version.getConnectorVersion(), false, null, Pair.emptyArray());
+                Version.getConnectorVersion(), false, null, Collections.singletonMap("Connector", "Fabric"));
         return connectionStringBuilder;
     }
 
@@ -130,12 +129,12 @@ public class EventHouseSinkTask extends SinkTask {
                 IngestionProperties props = new IngestionProperties(mapping.getDb(), mapping.getTable());
 
                 String format = mapping.getFormat();
-                if (StringUtils.isNotEmpty(format)) {
+                if (StringUtils.isNotBlank(format)) {
                     props.setDataFormat(format);
                 }
 
                 String mappingRef = mapping.getMapping();
-                if (StringUtils.isNotEmpty(mappingRef) && StringUtils.isNotEmpty(format)) {
+                if (StringUtils.isNotBlank(mappingRef) && StringUtils.isNotBlank(format)) {
                     props.setIngestionMapping(mappingRef,
                             IngestionMapping.IngestionMappingKind.valueOf(format.toUpperCase(Locale.ROOT)));
                 }
@@ -153,7 +152,7 @@ public class EventHouseSinkTask extends SinkTask {
     public void createKustoIngestClient(FabricSinkConfig config) {
         try {
             HttpClientProperties httpClientProperties = null;
-            if (StringUtils.isNotEmpty(config.getConnectionProxyHost()) && config.getConnectionProxyPort() > -1) {
+            if (StringUtils.isNotBlank(config.getConnectionProxyHost()) && config.getConnectionProxyPort() > -1) {
                 httpClientProperties = HttpClientProperties.builder().proxy(new ProxyOptions(ProxyOptions.Type.HTTP,
                         new InetSocketAddress(config.getConnectionProxyHost(), config.getConnectionProxyPort()))).build();
             }
@@ -224,11 +223,7 @@ public class EventHouseSinkTask extends SinkTask {
     public void start(Map<String, String> props) {
         config = new FabricSinkConfig(props);
         String url = config.getKustoIngestUrl();
-        if (config.isDlqEnabled()) {
-            isDlqEnabled = true;
-        } else {
-            isDlqEnabled = false;
-        }
+        isDlqEnabled = config.isDlqEnabled();
         topicsToIngestionProps = getTopicsToIngestionProps(config);
         // this should be read properly from settings
         createKustoIngestClient(config);

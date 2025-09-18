@@ -3,7 +3,7 @@ package com.microsoft.fabric.connect.eventhouse.sink;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -55,7 +55,7 @@ public class TopicPartitionWriterTest {
     public final void before() {
         currentDirectory = Utils.getCurrentWorkingDirectory();
         isDlqEnabled = false;
-        basePathCurrent = Paths.get(currentDirectory.getPath(), "testWriteStringyValuesAndOffset").toString();
+        basePathCurrent = Path.of(currentDirectory.getPath(), "testWriteStringyValuesAndOffset").toString();
         Map<String, String> settings = getKustoConfigs(basePathCurrent, FILE_THRESHOLD);
         config = new FabricSinkConfig(settings);
     }
@@ -169,7 +169,7 @@ public class TopicPartitionWriterTest {
             writer.writeRecord(sinkRecord, getHeaderTransforms());
         }
         Assertions.assertTrue((new File(writer.fileWriter.currentFile.path)).exists());
-        Assertions.assertEquals(String.format("kafka_%s_%d_%d.%s.gz", tp.topic(), tp.partition(), 4,
+        Assertions.assertEquals("kafka_%s_%d_%d.%s.gz".formatted(tp.topic(), tp.partition(), 4,
                 IngestionProperties.DataFormat.JSON.name()),
                 (new File(writer.fileWriter.currentFile.path)).getName());
         writer.close();
@@ -204,7 +204,7 @@ public class TopicPartitionWriterTest {
         String currentFileName = writer.fileWriter.currentFile.path;
 
         Assertions.assertTrue(new File(currentFileName).exists());
-        Assertions.assertEquals(String.format("kafka_%s_%d_%d.%s.gz", tp.topic(), tp.partition(),
+        Assertions.assertEquals("kafka_%s_%d_%d.%s.gz".formatted(tp.topic(), tp.partition(),
                 10, IngestionProperties.DataFormat.AVRO.name()),
                 (new File(currentFileName)).getName());
         writer.close();

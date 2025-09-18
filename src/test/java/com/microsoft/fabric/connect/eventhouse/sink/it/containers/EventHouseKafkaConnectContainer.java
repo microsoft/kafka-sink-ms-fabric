@@ -90,7 +90,7 @@ public class EventHouseKafkaConnectContainer extends GenericContainer<EventHouse
             connectorConfiguration.put("config", configuration);
             String postConfig = OBJECT_MAPPER.writeValueAsString(connectorConfiguration);
             LOGGER.trace("Registering connector {} with config {}", name, postConfig);
-            executePOSTRequestSuccessfully(postConfig, String.format("%s/connectors", getTarget()));
+            executePOSTRequestSuccessfully(postConfig, "%s/connectors".formatted(getTarget()));
             Awaitility.await()
                     .atMost(KAFKA_CONNECT_START_TIMEOUT)
                     .until(() -> isConnectorConfigured(name));
@@ -102,7 +102,7 @@ public class EventHouseKafkaConnectContainer extends GenericContainer<EventHouse
 
     public boolean isConnectorConfigured(String connectorName) {
         // HTTP get request to check if connector is configured
-        URI connectorUri = URI.create(String.format("%s/connectors/%s/status", getTarget(), connectorName));
+        URI connectorUri = URI.create("%s/connectors/%s/status".formatted(getTarget(), connectorName));
         HttpGet httpget = new HttpGet(connectorUri);
         try (CloseableHttpClient httpclient = HttpClients.createDefault();
                 CloseableHttpResponse httpResponse = httpclient.execute(httpget)) {
@@ -139,7 +139,7 @@ public class EventHouseKafkaConnectContainer extends GenericContainer<EventHouse
 
     public String getConnectorTaskState(String connectorName, int taskNumber) {
         // HTTP get request to check if connector is configured
-        URI statusUri = URI.create(String.format("%s/connectors/%s/tasks/%d/status", getTarget(), connectorName, taskNumber));
+        URI statusUri = URI.create("%s/connectors/%s/tasks/%d/status".formatted(getTarget(), connectorName, taskNumber));
         HttpGet httpget = new HttpGet(statusUri);
         try (CloseableHttpClient httpclient = HttpClients.createDefault();
                 CloseableHttpResponse httpResponse = httpclient.execute(httpget)) {

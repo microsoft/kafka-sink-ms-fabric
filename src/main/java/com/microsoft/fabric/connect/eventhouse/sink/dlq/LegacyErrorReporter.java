@@ -3,7 +3,7 @@ package com.microsoft.fabric.connect.eventhouse.sink.dlq;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
-import org.apache.commons.lang3.StringUtils;
+import com.microsoft.azure.kusto.data.StringUtils;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -60,7 +60,7 @@ public class LegacyErrorReporter implements KafkaRecordErrorReporter {
             }
             if (exception != null) {
                 throw new KafkaException(
-                        String.format("Failed to write records to miscellaneous dead-letter queue topic=%s.", dlqTopicName),
+                        "Failed to write records to miscellaneous dead-letter queue topic=%s.".formatted(dlqTopicName),
                         exception);
             } else {
                 if (recordMetadata != null) {
@@ -86,7 +86,7 @@ public class LegacyErrorReporter implements KafkaRecordErrorReporter {
             sinkRecord.headers().forEach(header -> {
                 if (header.value() != null) {
                     String headerValue = Values.convertToString(header.schema(), header.value());
-                    if (StringUtils.isNotEmpty(headerValue)) {
+                    if (StringUtils.isNotBlank(headerValue)) {
                         dlqRecord.headers().add(header.key(), headerValue.getBytes(StandardCharsets.UTF_8));
                     }
                 }

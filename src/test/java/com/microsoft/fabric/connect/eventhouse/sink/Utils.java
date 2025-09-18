@@ -1,7 +1,7 @@
 package com.microsoft.fabric.connect.eventhouse.sink;
 
 import java.io.File;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Objects;
 
@@ -25,7 +25,7 @@ public class Utils {
     }
 
     public static @NotNull File getCurrentWorkingDirectory() {
-        File currentDirectory = new File(Paths.get(
+        File currentDirectory = new File(Path.of(
                 System.getProperty("java.io.tmpdir"),
                 Utils.class.getSimpleName(),
                 String.valueOf(Instant.now().toEpochMilli())).toString());
@@ -64,7 +64,7 @@ public class Utils {
 
     public static int getFilesCount(String path) {
         File folder = new File(path);
-        return Objects.requireNonNull(folder.list(), String.format("File %s is empty and has no files", path)).length;
+        return Objects.requireNonNull(folder.list(), "File %s is empty and has no files".formatted(path)).length;
     }
 
     @Contract(pure = true)
