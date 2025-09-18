@@ -13,6 +13,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import com.fasterxml.jackson.databind.type.TypeFactory;
 import com.microsoft.azure.kusto.data.StringUtils;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -470,12 +471,16 @@ class EventHouseSinkIT {
                 .name("Timestamp").type().nullable().longType().noDefault()
                 .endRecord();
         long keyStart = 100000L;
+        Map<String, String> expectedResultMap = new HashMap<>();
         InputStream expectedResultsStream = Objects
                 .requireNonNull(this.getClass().getClassLoader().getResourceAsStream("avro-complex-data/expected-results.txt"));
         String expectedResults = IOUtils.toString(expectedResultsStream, StandardCharsets.UTF_8);
-        Map<String, String> expectedResultMap = Arrays.stream(expectedResults.split("\n"))
-                .map(line -> line.split("~"))
-                .collect(Collectors.toMap(arr -> arr[0], arr -> arr[1]));
+        List<Event> events = OBJECT_MAPPER.readValue(expectedResults, TypeFactory.defaultInstance().constructCollectionType(List.class, Event.class));
+        for (Event event : events) {
+            if (expectedResultMap.put(event.event_id, OBJECT_MAPPER.writeValueAsString(event)) != null) {
+                throw new IllegalStateException("Duplicate key %s".formatted(event.event_id));
+            }
+        }
         try (KafkaProducer<GenericData.Record, byte[]> producer = new KafkaProducer<>(producerProperties)) {
             for (int i = 1; i <= maxRecords; i++) {
                 // complex-avro-1.avro
@@ -652,5 +657,18 @@ class EventHouseSinkIT {
         consumerProperties.put("value.deserializer", valueDeserializer);
         consumerProperties.put("auto.offset.reset", "earliest");
         return consumerProperties;
+    }
+
+    static class Event {
+        public String event_id;
+        public int count;
+
+        public Event() {
+        }
+
+        public Event(String event_id, int count) {
+            this.event_id = event_id;
+            this.count = count;
+        }
     }
 }
