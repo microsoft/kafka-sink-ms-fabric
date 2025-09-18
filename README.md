@@ -1,5 +1,9 @@
 # Fabric Kafka Connect Kusto Sink Connector
 
+> **⚠️ Breaking Change (v2.0.0 and above):**
+> This connector is now built and tested on Java 21. You must use JDK 21 or newer to run or build this version. 
+> Older Java versions are not supported.
+
 This repository contains the source code of the Kafka Connect Fabric sink connector. Currently supports writing data to
 Eventhouse (Azure Data Explorer / Kusto) workloads on Fabric.
 
@@ -301,7 +305,7 @@ The following is complete set of connector sink properties -
 | 3 | mapping        | Ingestion mapping reference                                                                                                    | Database ingestion mapping reference. [Reference](https://learn.microsoft.com/en-us/kusto/management/mappings?view=microsoft-fabric)   <br>*Optional*                             |
 | 4 | streaming      | If the ingestion should use streaming                                                                                          | Enable streaming ingest on. 'true'/'false' . [Reference](https://learn.microsoft.com/en-us/azure/data-explorer/ingest-data-streaming?tabs=azure-portal%2Ccsharp)   <br>*Optional* |
 | 5 | table          | Target table for ingestion                                                                                                     | The table should be pre-created <br>*Required*                                                                                                                                    |
-| 6 | dynamicPayload | If the payload should be a dynamic field.<br> Useful in scenarios where multiple topics need to write to the same target table | The table has the definition ```.create-merge table <tbl> ([payload]:dynamic,[keys]:dynamic,[headers]:dynamic,[kafkamd]:dynamic ) ``` in this case <br>*Optional*                 |
+| 6 | dynamicPayload | If the payload should be a dynamic field.<br> Useful in scenarios where multiple topics need to write to the same target table | The table has the definition ```.create-merge table <tbl> ([payload]:dynamic,[kafkamd]:dynamic ) ``` in this case <br>*Optional*                                                  |
 
 ## 7. Streaming ingestion
 
@@ -424,11 +428,12 @@ connector aspect.
 
 ## 12. Release History
 
-| Release Version | Release Date | Changes Included                                                                             |
-|-----------------|--------------|----------------------------------------------------------------------------------------------|
-| 1.0.0           | 2024-12-30   | <ul><li>Initial release</li></ul>                                                            |  
-| 1.1.0           | 2024-01-21   | <ul><li>Add additional headers for DLQ support</li><br/><li>Bump Kusto SDK version</li></ul> |  
-| 1.2.0           | 2024-01-31   | <ul><li>Support for optional field dynamicPayload</li></ul>                                  |  
+| Release Version | Release Date | Changes Included                                                                                      |
+|-----------------|--------------|-------------------------------------------------------------------------------------------------------|
+| 1.0.0           | 2024-12-30   | <ul><li>Initial release</li></ul>                                                                     |  
+| 1.1.0           | 2024-01-21   | <ul><li>Add additional headers for DLQ support</li><br/><li>Bump Kusto SDK version</li></ul>          |  
+| 1.2.0           | 2024-01-31   | <ul><li>Support for optional field dynamicPayload</li></ul>                                           |  
+| 2.0.0           | 2025-09-18   | <ul><li>**Breaking change:** Updated all dependencies. This is built and tested on Java 21.</li></ul> |  
 
 ## 12. Contributing
 
