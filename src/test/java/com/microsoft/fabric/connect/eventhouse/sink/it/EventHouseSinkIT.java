@@ -209,7 +209,11 @@ class EventHouseSinkIT {
         connectorProps.put("key.converter", keyFormat);
         connectorProps.put("value.converter", valueFormat);
         connectorProps.put("proxy.host", proxyContainer.getContainerId().substring(0, 12));
-        connectorProps.put("proxy.port", proxyContainer.getExposedPorts().getFirst());
+        List<Integer> exposedPorts = proxyContainer.getExposedPorts();
+        if (exposedPorts == null || exposedPorts.isEmpty()) {
+            throw new IllegalStateException("Proxy container has no exposed ports.");
+        }
+        connectorProps.put("proxy.port", exposedPorts.get(0));
         connectorProps.putAll(overrideProps);
         String connectorName = overrideProps.getOrDefault("connector.name",
                 "adx-connector-%s".formatted(dataFormat)).toString();
