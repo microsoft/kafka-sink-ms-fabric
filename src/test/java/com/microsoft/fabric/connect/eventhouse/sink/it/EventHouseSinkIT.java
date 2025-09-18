@@ -573,7 +573,11 @@ class EventHouseSinkIT {
         String dlqTopicName = "e2e.tests.%s.dlq.topic".formatted(dataFormat);
         overrides.put("misc.deadletterqueue.topic.name", dlqTopicName);
         overrides.put("proxy.host", proxyContainer.getContainerId().substring(0, 12));
-        overrides.put("proxy.port", proxyContainer.getExposedPorts().getFirst());
+        List<Integer> exposedPorts = proxyContainer.getExposedPorts();
+        if (exposedPorts.isEmpty()) {
+            throw new IllegalStateException("Proxy container has no exposed ports.");
+        }
+        overrides.put("proxy.port", exposedPorts.getFirst());
         overrides.put("connector.name", "dlq-connector-%s".formatted(dataFormat));
         overrides.put("schema.registry.url", srUrl);
         overrides.put("value.converter.schema.registry.url", srUrl);
