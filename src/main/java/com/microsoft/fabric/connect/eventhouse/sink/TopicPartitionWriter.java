@@ -87,9 +87,13 @@ public class TopicPartitionWriter {
                 /* Retry the streaming ingest failures */
                 ingestionStatusResult -> {
                     try {
-                        return ingestionStatusResult instanceof IngestionStatusResult isr
-                                && !isr.getIngestionStatusCollection().isEmpty()
-                                && hasStreamingIngestionFailed(isr.getIngestionStatusCollection().getFirst());
+                        if (ingestionStatusResult instanceof IngestionStatusResult isr) {
+                            if (!isr.getIngestionStatusCollection().isEmpty()) {
+                                var firstStatus = isr.getIngestionStatusCollection().stream().findFirst().orElse(null);
+                                return firstStatus != null && hasStreamingIngestionFailed(firstStatus);
+                            }
+                        }
+                        return false;
                     } catch (URISyntaxException e) {
                         throw new RuntimeException(e);
                     }
