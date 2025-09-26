@@ -83,7 +83,8 @@ external_id_type are stored in the root of the message.
   "kafkamd": {
     "partition": "0",
     "offset": "1",
-    "topic": "e2e.bytes-avro.topic"
+    "topic": "e2e.bytes-avro.topic",
+    "enqueuedTime": "1758882047427"
   },
   "headers": {
     "vtype": "bytes-avro",
@@ -384,7 +385,7 @@ https://github.com/microsoft/kafka-sink-ms-fabric/releases
 
 The dependencies are-
 
-* JDK >= 1.8 [download](https://www.oracle.com/technetwork/java/javase/downloads/index.html)
+* JDK >= 21 [download](https://www.oracle.com/technetwork/java/javase/downloads/index.html)
 * Maven [download](https://maven.apache.org/install.html)
 
 **1. Clone the repo**<br>
@@ -434,6 +435,7 @@ connector aspect.
 | 1.1.0           | 2024-01-21   | <ul><li>Add additional headers for DLQ support</li><br/><li>Bump Kusto SDK version</li></ul>          |  
 | 1.2.0           | 2024-01-31   | <ul><li>Support for optional field dynamicPayload</li></ul>                                           |  
 | 2.0.0           | 2025-09-18   | <ul><li>**Breaking change:** Updated all dependencies. This is built and tested on Java 21.</li></ul> |  
+| 2.0.1           | 2025-09-26   | <ul><li>Add additional attribute **enqueuedTime** as a field in kafkamd field</li></ul>               |  
 
 ## 12. Contributing
 

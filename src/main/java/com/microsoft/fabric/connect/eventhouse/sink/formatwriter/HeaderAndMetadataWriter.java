@@ -35,6 +35,7 @@ public abstract class HeaderAndMetadataWriter {
     public static final String TOPIC = "topic";
     public static final String PARTITION = "partition";
     public static final String OFFSET = "offset";
+    public static final String ENQUEUED_TS = "enqueuedTime";
 
     @NotNull
     public Map<String, Object> getHeadersAsMap(@NotNull SinkRecord sinkRecord, @NotNull HeaderTransforms headerTransforms) {
@@ -132,6 +133,7 @@ public abstract class HeaderAndMetadataWriter {
         kafkaMetadata.put(TOPIC, sinkRecord.topic());
         kafkaMetadata.put(PARTITION, String.valueOf(sinkRecord.kafkaPartition()));
         kafkaMetadata.put(OFFSET, String.valueOf(sinkRecord.kafkaOffset()));
+        kafkaMetadata.put(ENQUEUED_TS, String.valueOf(sinkRecord.timestamp()));
         return kafkaMetadata;
     }
 }

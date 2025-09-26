@@ -121,7 +121,7 @@ class FileWriterTest {
         Assertions.assertTrue(createDirectoryWithPermissions(path));
         Assertions.assertEquals(0, getFilesCount(path));
         HashMap<String, Long> files = new HashMap<>();
-        final int MAX_FILE_SIZE = 225; // sizeof(,'','','{"partition":"1","offset":"1","topic":"topic"}'\n) * 2 , Similar multiple applied for the first test
+        final int MAX_FILE_SIZE = 260; // sizeof(,'','','{"partition":"1","offset":"1","topic":"topic"}'\n) * 2 , Similar multiple applied for the first test
         Consumer<SourceFile> trackFiles = (SourceFile f) -> files.put(f.path, f.rawBytes);
         Function<Long, String> generateFileName = (Long l) -> Path.of(path, String.valueOf(java.util.UUID.randomUUID())) + "csv.gz";
         EventHouseRecordWriter eventHouseRecordWriter = new EventHouseRecordWriter(path, NullOutputStream.INSTANCE, FABRIC_SINK_CONFIG);
@@ -151,7 +151,7 @@ class FileWriterTest {
             List<Long> sortedFiles = new ArrayList<>(files.values());
             sortedFiles.sort((Long x, Long y) -> (int) (y - x));
             Assertions.assertEquals(
-                    Arrays.asList((long) 414, (long) 414, (long) 414, (long) 414, (long) 207),
+                    Arrays.asList((long) 466, (long) 466, (long) 466, (long) 466, (long) 233),
                     sortedFiles);
             // make sure folder is clear once done - with only the new file
             Assertions.assertEquals(1, getFilesCount(path));
@@ -190,7 +190,7 @@ class FileWriterTest {
         Awaitility.await().atMost(3, SECONDS).untilAsserted(() -> Assertions.assertEquals(2, files.size()));
         List<Long> sortedFiles = new ArrayList<>(files.values());
         sortedFiles.sort((Long x, Long y) -> (int) (y - x));
-        Assertions.assertEquals(sortedFiles, Arrays.asList((long) 81, (long) 74));
+        Assertions.assertEquals(sortedFiles, Arrays.asList((long) 107, (long) 100));
         // make sure folder is clear once done
         fileWriter2.close();
         Assertions.assertEquals(1, getFilesCount(path));
@@ -260,8 +260,8 @@ class FileWriterTest {
              * > Why did this become 146 ? The CSV now becomes : 'Second Message','','','{"partition":"1","offset":"1","topic":"topic"}'\n 2 of these become 146
              * bytes
              */
-            Assertions.assertEquals(164L, files.stream().map(Map.Entry::getValue).toArray(Long[]::new)[0]);
-            Assertions.assertEquals(84L, files.stream().map(Map.Entry::getValue).toArray(Long[]::new)[1]);
+            Assertions.assertEquals(216L, files.stream().map(Map.Entry::getValue).toArray(Long[]::new)[0]);
+            Assertions.assertEquals(110L, files.stream().map(Map.Entry::getValue).toArray(Long[]::new)[1]);
             Assertions.assertEquals("1",
                     files.stream().map(s -> s.getKey().substring(path.length() + 1)).toArray(String[]::new)[0]);
             Assertions.assertEquals("3",
