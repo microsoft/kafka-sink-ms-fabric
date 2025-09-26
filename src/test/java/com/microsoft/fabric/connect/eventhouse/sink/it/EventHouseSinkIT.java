@@ -173,9 +173,9 @@ class EventHouseSinkIT {
 
     @AfterAll
     public static void stopContainers() {
-        engineClient.executeMgmt(coordinates.database, ".drop table %s".formatted(coordinates.table));
-        engineClient.executeMgmt(coordinates.database, ".drop table %s".formatted(COMPLEX_AVRO_BYTES_TABLE_TEST));
-        engineClient.executeMgmt(coordinates.database, ".drop table %s_d".formatted(coordinates.table));
+//        engineClient.executeMgmt(coordinates.database, ".drop table %s".formatted(coordinates.table));
+//        engineClient.executeMgmt(coordinates.database, ".drop table %s".formatted(COMPLEX_AVRO_BYTES_TABLE_TEST));
+//        engineClient.executeMgmt(coordinates.database, ".drop table %s_d".formatted(coordinates.table));
         LOGGER.info("Finished table clean up. Dropped tables {} and {}", coordinates.table, COMPLEX_AVRO_BYTES_TABLE_TEST);
         connectContainer.stop();
         schemaRegistryContainer.stop();
