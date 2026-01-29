@@ -118,7 +118,7 @@ public class TopicPartitionWriter {
          * into DLQ topic. Recommendation is to set the following worker configuration as `connector.client.config.override.policy=All` and set the
          * `consumer.override.max.poll.interval.ms` config to a high enough value to avoid consumer leaving the group while the Connector is retrying.
          */
-        this.ingestionRetry.executeTrySupplier(() -> Try.of(() -> this.client.ingestFromFile(fileSourceInfo, updateIngestionPropertiesWithTargetFormat())))
+        Try.of(() -> this.ingestionRetry.executeSupplier(() -> this.client.ingestFromFile(fileSourceInfo, updateIngestionPropertiesWithTargetFormat())))
                 .onSuccess(ingestionStatusResult -> {
                     this.lastCommittedOffset = currentOffset;
                     LOGGER.debug("Ingestion status: {} for file {} with ID {} .Committed offset {} ", ingestionStatusResult,
@@ -126,7 +126,7 @@ public class TopicPartitionWriter {
                 })
                 .onFailure(ex -> {
                     if (behaviorOnError != BehaviorOnError.FAIL) {
-                        fileDescriptor.records.forEach(sinkRecord -> this.errorReporter.reportError(sinkRecord, new ConnectException(ex)));
+                        fileDescriptor.records.forEach(sinkRecord -> this.errorReporter.reportError(sinkRecord, new ConnectException(ex.getMessage(), ex)));
                     }
                 });
     }

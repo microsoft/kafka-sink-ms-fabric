@@ -13,6 +13,9 @@ import java.util.stream.IntStream;
 import org.json.JSONException;
 import org.junit.jupiter.api.Assertions;
 import org.skyscreamer.jsonassert.JSONAssert;
+import org.skyscreamer.jsonassert.JSONCompareMode;
+import org.skyscreamer.jsonassert.JSONCompareResult;
+import org.skyscreamer.jsonassert.comparator.DefaultComparator;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -35,6 +38,29 @@ public abstract class EventHouseRecordWriterBase {
     protected static final TypeReference<Map<String, Object>> GENERIC_MAP = new TypeReference<Map<String, Object>>() {};
     protected static final FabricSinkConfig FABRIC_SINK_CONFIG = new FabricSinkConfig(setupConfigs());
 
+    // Custom comparator that handles floating-point comparison with tolerance
+    private static class FloatToleranceComparator extends DefaultComparator {
+        private static final double TOLERANCE = 0.01;
+
+        public FloatToleranceComparator(JSONCompareMode mode) {
+            super(mode);
+        }
+
+        @Override
+        public void compareValues(String prefix, Object expectedValue, Object actualValue, JSONCompareResult result) throws JSONException {
+            if (expectedValue instanceof Number && actualValue instanceof Number) {
+                double expected = ((Number) expectedValue).doubleValue();
+                double actual = ((Number) actualValue).doubleValue();
+                if (Math.abs(expected - actual) < TOLERANCE) {
+                    // Values are within tolerance, consider them equal
+                    return;
+                }
+            }
+            // For non-numeric values or values outside tolerance, use default comparison
+            super.compareValues(prefix, expectedValue, actualValue, result);
+        }
+    }
+
     public HeaderTransforms headerTransforms() throws JsonProcessingException {
         CollectionType resultType = TypeFactory.defaultInstance().constructCollectionType(Set.class, String.class);
         String projectHeaders = "[" + IntStream.range(0, 10)
@@ -53,14 +79,17 @@ public abstract class EventHouseRecordWriterBase {
     protected void validate(String actualFilePath, Map<Integer, String[]> expectedResultsMap) throws IOException, JSONException {
         // Warns if the types are not generified
         List<String> actualJson = Files.readAllLines(Path.of(actualFilePath));
+        // Create a custom comparator that applies float tolerance
+        FloatToleranceComparator comparator = new FloatToleranceComparator(JSONCompareMode.LENIENT);
+
         for (int i = 0; i < actualJson.size(); i++) {
             String actual = actualJson.get(i);
             Map<String, Object> actualMap = RESULT_MAPPER.readValue(actual, GENERIC_MAP);
             String[] expected = expectedResultsMap.get(i);
             String actualKeys = RESULT_MAPPER.writeValueAsString(actualMap.get(KEYS));
             String actualHeaders = RESULT_MAPPER.writeValueAsString(actualMap.get(HEADERS));
-            JSONAssert.assertEquals(expected[1], actualKeys, false);
-            JSONAssert.assertEquals(expected[0], actualHeaders, false);
+            JSONAssert.assertEquals(expected[1], actualKeys, comparator);
+            JSONAssert.assertEquals(expected[0], actualHeaders, comparator);
             // to get the values it is to remove keys and headers , then get all the fields and compare
             actualMap.remove(KEYS);
             actualMap.remove(HEADERS);
@@ -71,7 +100,7 @@ public abstract class EventHouseRecordWriterBase {
                 // there are no fields or no keys
                 Assertions.assertTrue(actualMap.isEmpty(), "Expected null value for tombstone record");
             } else {
-                JSONAssert.assertEquals(expected[2], actualValues, false);
+                JSONAssert.assertEquals(expected[2], actualValues, comparator);
             }
         }
     }

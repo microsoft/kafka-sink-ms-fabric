@@ -88,7 +88,7 @@ class EventHouseSinkIT {
     private static final Network network = Network.newNetwork();
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final Integer KAFKA_MAX_MSG_SIZE = 3 * 1024 * 1024;
-    private static final String CONFLUENT_VERSION = "8.0.0";
+    private static final String CONFLUENT_VERSION = "8.1.0";
     private static final String KAFKA_LISTENER = "kafka:19092";
     private static final ConfluentKafkaContainer kafkaContainer = new ConfluentKafkaContainer(
             DockerImageName.parse("confluentinc/cp-kafka:" + CONFLUENT_VERSION))
