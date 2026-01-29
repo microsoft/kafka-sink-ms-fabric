@@ -213,7 +213,7 @@ class EventHouseSinkIT {
         if (exposedPorts == null || exposedPorts.isEmpty()) {
             throw new IllegalStateException("Proxy container has no exposed ports.");
         }
-        connectorProps.put("proxy.port", exposedPorts.get(0));
+        connectorProps.put("proxy.port", exposedPorts.getFirst());
         connectorProps.putAll(overrideProps);
         String connectorName = overrideProps.getOrDefault("connector.name",
                 "adx-connector-%s".formatted(dataFormat)).toString();

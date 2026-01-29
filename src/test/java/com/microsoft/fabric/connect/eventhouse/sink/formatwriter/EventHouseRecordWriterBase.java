@@ -35,7 +35,8 @@ public abstract class EventHouseRecordWriterBase {
     protected static final String KAFKA_MD = "kafkamd";
     protected static final ObjectMapper RESULT_MAPPER = new ObjectMapper().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS)
             .enable(JsonParser.Feature.ALLOW_SINGLE_QUOTES);
-    protected static final TypeReference<Map<String, Object>> GENERIC_MAP = new TypeReference<Map<String, Object>>() {};
+    protected static final TypeReference<Map<String, Object>> GENERIC_MAP = new TypeReference<>() {
+    };
     protected static final FabricSinkConfig FABRIC_SINK_CONFIG = new FabricSinkConfig(setupConfigs());
 
     // Custom comparator that handles floating-point comparison with tolerance
@@ -68,7 +69,7 @@ public abstract class EventHouseRecordWriterBase {
                 .flatMap(Arrays::stream)
                 .collect(Collectors.joining(", ")) + "]";
         String dropHeaders = "[" + IntStream.range(0, 10)
-                .mapToObj(i -> "'DropInt-%d'".formatted(i))
+                .mapToObj("'DropInt-%d'"::formatted)
                 .collect(Collectors.joining(", ")) + "]";
 
         Set<String> headersToProject = RESULT_MAPPER.readValue(projectHeaders, resultType);
