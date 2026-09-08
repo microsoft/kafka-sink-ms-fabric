@@ -17,14 +17,14 @@ jobs:
       contents: read
     steps:
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2.3.1
         with:
           client-id: ${{ secrets.APP_ID }}
           tenant-id: ${{ secrets.TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Setup Java 21
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@e9fbacdec3bb3b6036605a3e6f7995d66773a8c6 # v3.14.2
         with:
           java-version: 21
           distribution: 'temurin'
@@ -41,4 +41,4 @@ jobs:
 
       - name: Publish Test Report
         if: success() || failure()
-        uses: scacap/action-surefire-report@v1
+        uses: scacap/action-surefire-report@c38a2d74b9840ae8950a4387ae02b637421d0f39 # v1.13.0
