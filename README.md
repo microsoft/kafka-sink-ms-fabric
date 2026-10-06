@@ -250,11 +250,17 @@ when it starts and unregisters it when it stops.
 | DlqRecordsSent      | Counter | Total number of records reported to the dead letter queue                   |
 
 These metrics can be read with any JMX tool (JConsole, VisualVM, Prometheus JMX Exporter, Datadog, etc.). To enable JMX
-remote access on your Kafka Connect workers, add JVM options such as:
+remote access on your Kafka Connect workers for **local development only**, you can bind JMX to the loopback interface
+without authentication:
 
 ```
-KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
+KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.host=127.0.0.1 -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
 ```
+
+> **Warning:** Never expose an unauthenticated, unencrypted JMX port on a network. In production, enable authentication
+> and TLS (`-Dcom.sun.management.jmxremote.authenticate=true`, `-Dcom.sun.management.jmxremote.ssl=true`,
+> `-Dcom.sun.management.jmxremote.password.file=...`, `-Dcom.sun.management.jmxremote.access.file=...`), restrict the
+> port with firewall rules, or prefer an in-process agent such as the Prometheus JMX Exporter below.
 
 For Prometheus, use the [JMX Exporter](https://github.com/prometheus/jmx_exporter) agent and scrape the
 `com.microsoft.fabric.connect.eventhouse.sink` domain.

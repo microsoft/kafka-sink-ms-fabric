@@ -449,7 +449,7 @@ public class FabricSinkConfig extends AbstractConfig {
     public String getKustoIngestUrl() {
         String ingestionUrl = this.getString(KUSTO_INGEST_URL_CONF);
         if (StringUtils.isNotBlank(ingestionUrl)) {
-            return ingestionUrl;
+            return KustoEndpointUrlValidator.normalizeUrl(ingestionUrl);
         }
         return getUrlFromConnectionString(false);
     }
@@ -480,7 +480,7 @@ public class FabricSinkConfig extends AbstractConfig {
     public String getKustoEngineUrl() {
         String clusterUrl = this.getString(KUSTO_ENGINE_URL_CONF);
         if (StringUtils.isNotBlank(clusterUrl)) {
-            return clusterUrl;
+            return KustoEndpointUrlValidator.normalizeUrl(clusterUrl);
         }
         return getUrlFromConnectionString(true);
     }

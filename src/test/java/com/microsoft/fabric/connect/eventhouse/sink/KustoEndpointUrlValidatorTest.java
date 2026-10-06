@@ -297,6 +297,25 @@ public class KustoEndpointUrlValidatorTest {
     }
 
     @Test
+    public void schemeLessUrlsShouldBeNormalizedForTheSdk() {
+        HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
+        configs.put(FabricSinkConfig.KUSTO_INGEST_URL_CONF, " ingest-mycluster.kusto.windows.net ");
+        configs.put(FabricSinkConfig.KUSTO_ENGINE_URL_CONF, "mycluster.kusto.windows.net");
+        FabricSinkConfig config = new FabricSinkConfig(configs);
+        assertEquals("https://ingest-mycluster.kusto.windows.net", config.getKustoIngestUrl());
+        assertEquals("https://mycluster.kusto.windows.net", config.getKustoEngineUrl());
+        // The SDK requires a URI authority; this would throw for a scheme-less value
+        assertDoesNotThrow(() -> com.microsoft.azure.kusto.data.UriUtils.createClusterURLFrom(config.getKustoEngineUrl()));
+        assertDoesNotThrow(() -> EventHouseSinkTask.createKustoEngineConnectionString(config, config.getKustoIngestUrl()));
+    }
+
+    @Test
+    public void normalizeUrlShouldKeepExistingScheme() {
+        assertEquals("https://mycluster.kusto.windows.net", KustoEndpointUrlValidator.normalizeUrl("https://mycluster.kusto.windows.net"));
+        assertNull(KustoEndpointUrlValidator.normalizeUrl(null));
+    }
+
+    @Test
     public void shouldValidateDataSourceInConnectionStringBuilder() {
         // Explicit trusted URLs pass the config check; with an empty app key, the task falls back to the connection string,
         // so its own Data Source must be validated as well (defense in depth).

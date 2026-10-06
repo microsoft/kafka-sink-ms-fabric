@@ -34,6 +34,18 @@ public final class KustoEndpointUrlValidator {
     }
 
     /**
+     * Trims the URL and prepends {@code https://} when no scheme is given, so that scheme-less values accepted by
+     * validation are also usable by the Kusto SDK (which requires a URI authority). Blank values are returned as-is.
+     */
+    public static String normalizeUrl(String url) {
+        if (StringUtils.isBlank(url)) {
+            return url;
+        }
+        String trimmed = url.trim();
+        return trimmed.contains("://") ? trimmed : HTTPS_SCHEME_PREFIX + trimmed;
+    }
+
+    /**
      * Validates that a URL points to a legitimate Azure Data Explorer / Fabric Eventhouse endpoint.
      *
      * @param url       the URL string to validate
@@ -45,16 +57,12 @@ public final class KustoEndpointUrlValidator {
             return;
         }
 
-        url = url.trim();
-
-        if (url.regionMatches(true, 0, "http://", 0, 7)) {
+        if (url.trim().regionMatches(true, 0, "http://", 0, 7)) {
             throw new ConfigException(configKey, url,
                     "HTTP is not supported. Only HTTPS endpoints are allowed.");
         }
 
-        if (!url.regionMatches(true, 0, HTTPS_SCHEME_PREFIX, 0, HTTPS_SCHEME_PREFIX.length())) {
-            url = HTTPS_SCHEME_PREFIX + url;
-        }
+        url = normalizeUrl(url);
 
         URI uri;
         try {

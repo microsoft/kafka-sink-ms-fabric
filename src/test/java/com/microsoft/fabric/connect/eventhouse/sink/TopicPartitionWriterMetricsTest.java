@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test;
 import com.microsoft.azure.kusto.ingest.IngestClient;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.azure.kusto.ingest.exceptions.IngestionClientException;
+import com.microsoft.azure.kusto.ingest.result.IngestionStatus;
+import com.microsoft.azure.kusto.ingest.result.IngestionStatusResult;
+import com.microsoft.azure.kusto.ingest.result.OperationStatus;
 import com.microsoft.azure.kusto.ingest.source.FileSourceInfo;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.KafkaRecordErrorReporter;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.NoOpLoggerErrorReporter;
@@ -136,6 +139,39 @@ public class TopicPartitionWriterMetricsTest {
         writer.handleRollFile(descriptor);
         assertEquals(1, metrics.getIngestionFailures());
         assertEquals(0, metrics.getDlqRecordsSent());
+    }
+
+    @Test
+    public void failedStreamingStatusShouldCountAsFailureNotSuccess() {
+        IngestClient client = mock(IngestClient.class);
+        IngestionStatus failed = new IngestionStatus();
+        failed.status = OperationStatus.Failed;
+        when(client.ingestFromFile(any(FileSourceInfo.class), any(IngestionProperties.class)))
+                .thenReturn(new IngestionStatusResult(failed));
+        TopicIngestionProperties props = props();
+        props.streaming = true;
+        TopicPartitionWriter writer = new TopicPartitionWriter(TP, client, props, config("LOG"), false,
+                Utils.noOpKafkaRecordErrorReporter(), metrics);
+        writer.handleRollFile(new SourceFile());
+        assertEquals(1, metrics.getIngestionAttempts());
+        assertEquals(0, metrics.getIngestionSuccesses());
+        assertEquals(1, metrics.getIngestionFailures());
+    }
+
+    @Test
+    public void succeededStreamingStatusShouldCountAsSuccess() {
+        IngestClient client = mock(IngestClient.class);
+        IngestionStatus ok = new IngestionStatus();
+        ok.status = OperationStatus.Succeeded;
+        when(client.ingestFromFile(any(FileSourceInfo.class), any(IngestionProperties.class)))
+                .thenReturn(new IngestionStatusResult(ok));
+        TopicIngestionProperties props = props();
+        props.streaming = true;
+        TopicPartitionWriter writer = new TopicPartitionWriter(TP, client, props, config("LOG"), false,
+                Utils.noOpKafkaRecordErrorReporter(), metrics);
+        writer.handleRollFile(new SourceFile());
+        assertEquals(1, metrics.getIngestionSuccesses());
+        assertEquals(0, metrics.getIngestionFailures());
     }
 
     @Test
