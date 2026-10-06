@@ -296,6 +296,18 @@ public class KustoEndpointUrlValidatorTest {
         assertDoesNotThrow(() -> new FabricSinkConfig(configs));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"ftp://mycluster.kusto.windows.net", "ws://mycluster.kusto.windows.net",
+            "file://mycluster.kusto.windows.net/x", "HTTP://mycluster.kusto.windows.net"})
+    public void nonHttpsSchemesShouldBeRejected(String url) {
+        assertThrows(ConfigException.class, () -> KustoEndpointUrlValidator.validateEndpointUrl(url, "test.key"));
+    }
+
+    @Test
+    public void upperCaseHttpsSchemeShouldBeAccepted() {
+        assertDoesNotThrow(() -> KustoEndpointUrlValidator.validateEndpointUrl("HTTPS://mycluster.kusto.windows.net", "test.key"));
+    }
+
     @Test
     public void schemeLessUrlsShouldBeNormalizedForTheSdk() {
         HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();

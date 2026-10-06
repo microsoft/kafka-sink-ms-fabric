@@ -72,6 +72,11 @@ public final class KustoEndpointUrlValidator {
                     "Invalid URL format: " + e.getMessage());
         }
 
+        if (!"https".equalsIgnoreCase(uri.getScheme())) {
+            throw new ConfigException(configKey, url,
+                    "Unsupported URL scheme. Only HTTPS endpoints are allowed.");
+        }
+
         String host = uri.getHost();
         if (host == null || isLocalOrIpLiteral(host)) {
             throw new ConfigException(configKey, url,
