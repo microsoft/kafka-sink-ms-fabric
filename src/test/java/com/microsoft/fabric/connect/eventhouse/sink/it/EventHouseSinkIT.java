@@ -254,7 +254,7 @@ class EventHouseSinkIT {
                     coordinates.table, dataFormat.split("-")[1]);
         }
         LOGGER.info("Deploying connector for {} , using SR url {}. Using proxy host {} and port {}", dataFormat, srUrl,
-                proxyContainer.getContainerId().substring(0, 12), proxyContainer.getExposedPorts().getFirst());
+                proxyContainer.getContainerId().substring(0, 12), proxyContainer.getExposedPorts().get(0));
         deployConnector(dataFormat, topicTableMapping, srUrl, keyFormat, valueFormat);
         try {
             int maxRecords = 10;
@@ -581,7 +581,7 @@ class EventHouseSinkIT {
         if (exposedPorts.isEmpty()) {
             throw new IllegalStateException("Proxy container has no exposed ports.");
         }
-        overrides.put("proxy.port", exposedPorts.getFirst());
+        overrides.put("proxy.port", exposedPorts.get(0));
         overrides.put("connector.name", "dlq-connector-%s".formatted(dataFormat));
         overrides.put("schema.registry.url", srUrl);
         overrides.put("value.converter.schema.registry.url", srUrl);

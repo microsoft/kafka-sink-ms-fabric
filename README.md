@@ -1,7 +1,7 @@
 # Fabric Kafka Connect Kusto Sink Connector
 
-> **⚠️ Breaking Change (v2.0.0 and above):**
-> This connector is now built and tested on Java 21. You must use JDK 21 or newer to run or build this version. 
+> **Java requirement (v2.1.0 and above):**
+> This connector is built and tested on Java 17 (compiled against Kafka 4.1.1). You must use JDK 17 or newer to run or build this version.
 > Older Java versions are not supported.
 
 This repository contains the source code of the Kafka Connect Fabric sink connector. Currently supports writing data to
@@ -30,6 +30,7 @@ Eventhouse (Azure Data Explorer / Kusto) workloads on Fabric.
     * [3.13. Parallelism](#313-parallelism)
     * [3.14. Authentication & Authorization to Azure Data Explorer](#314-authentication--authorization-to-azure-data-explorer)
     * [3.16. Security related](#316-security-related)
+    * [3.17. JMX Metrics](#317-jmx-metrics)
   * [4. Connect worker properties](#4-connect-worker-properties)
     * [4.1. Confluent Cloud](#41-confluent-cloud)
   * [5. Sink properties](#5-sink-properties)
@@ -169,6 +170,7 @@ The corresponding mapping can be
 ### 3.7. Topics to tables mapping
 
 - The connector supports multiple topics to multiple tables configuration per Kafka Connect worker
+- It also supports wildcard mapping, where a topic name of `*` in the mapping will be used for any topic not explicitly listed.
 
 ### 3.8. Kafka Connect Dead Letter Queue
 
@@ -225,6 +227,37 @@ Therefore, the connector supports "At least once" delivery guarantees.
 - Kafka Connect supports all security protocols supported by Kafka, as does our connector
 - See below for some security related config that needs to be applied at Kafka Connect worker level as well as in the
   sink properties
+- Eventhouse endpoint URLs (`kusto.ingestion.url`, `kusto.query.url`, and the `Data Source` of a Kusto `connection.string`)
+  must be HTTPS and must point to a well-known trusted Azure Data Explorer / Fabric endpoint (for example
+  `*.kusto.windows.net` or `*.kusto.fabric.microsoft.com`, as listed in the azure-kusto-java SDK's `WellKnownKustoEndpoints.json`).
+  If no scheme is given, `https://` is assumed. Other hosts, including `localhost`, are rejected at startup so that
+  Entra ID tokens are never sent to an untrusted host. EventStream (`sb://`) connection strings are not affected.
+
+### 3.17. JMX Metrics
+
+The connector exposes JMX metrics for monitoring ingestion and tracking failures. Each sink task registers its own MBean
+when it starts and unregisters it when it stops.
+
+**MBean name:** `com.microsoft.fabric.connect.eventhouse.sink:type=FabricSinkMetrics,connector="<connector name>",task=<n>`
+
+| Metric              | Type    | Description                                                                 |
+|:--------------------|:--------|:----------------------------------------------------------------------------|
+| RecordsWritten      | Counter | Total number of records (including tombstones) written to staging files      |
+| RecordsFailed       | Counter | Total number of records that failed during write                            |
+| IngestionAttempts   | Counter | Total number of file ingestion attempts to Eventhouse (each retry counts)   |
+| IngestionSuccesses  | Counter | Total number of successful file ingestions                                  |
+| IngestionFailures   | Counter | Total number of failed file ingestions (after retries are exhausted)        |
+| DlqRecordsSent      | Counter | Total number of records reported to the dead letter queue                   |
+
+These metrics can be read with any JMX tool (JConsole, VisualVM, Prometheus JMX Exporter, Datadog, etc.). To enable JMX
+remote access on your Kafka Connect workers, add JVM options such as:
+
+```
+KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false"
+```
+
+For Prometheus, use the [JMX Exporter](https://github.com/prometheus/jmx_exporter) agent and scrape the
+`com.microsoft.fabric.connect.eventhouse.sink` domain.
 
 
 ## 4. Connect worker properties
@@ -261,7 +294,7 @@ The following is complete set of connector sink properties -
 | 7  | aad.auth.authority                           | Credentials for EventHouse                                                                    | Provide the tenant ID of your Azure Active Directory<br>*Required when authentication is done with an `application` or when `kusto.validation.table.enable` is set to `true`*                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | 8  | aad.auth.appid                               | Credentials for EventHouse                                                                    | Provide Azure Active Directory Service Principal Name<br>*Required when authentication is done with an `application` or when `kusto.validation.table.enable` is set to `true`*                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | 9  | aad.auth.appkey                              | Credentials for EventHouse                                                                    | Provide Azure Active Directory Service Principal secret<br>*Required when authentication is done with an `application`*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| 10 | kusto.tables.topics.mapping                  | Mapping of topics to tables                                                                   | Provide 1..many topic-table comma-separated mappings as follows-<br>[{'topic': '\<topicName1\>','db': '\<datebaseName\>', 'table': '\<tableName1\>','format': '<format-e.g.avro/csv/json>', 'mapping':'\<tableMappingName1\>','streaming':'false'},{'topic': '\<topicName2\>','db': '\<datebaseName\>', 'table': '\<tableName2\>','format': '<format-e.g.avro/csv/json>', 'mapping':'\<tableMappingName2\>','streaming':'false'}]<br>*Required* <br> Note : The attribute mapping (Ex:'mapping':''tableMappingName1') is an optional attribute. During ingestion, Azure Data Explorer automatically maps column according to the ingestion format |
+| 10 | kusto.tables.topics.mapping                  | Mapping of topics to tables                                                                   | Provide 1..many topic-table comma-separated mappings as follows-<br>[{'topic': '\<topicName1\>','db': '\<datebaseName\>', 'table': '\<tableName1\>','format': '<format-e.g.avro/csv/json>', 'mapping':'\<tableMappingName1\>','streaming':'false'},{'topic': '\<topicName2\>','db': '\<datebaseName\>', 'table': '\<tableName2\>','format': '<format-e.g.avro/csv/json>', 'mapping':'\<tableMappingName2\>','streaming':'false'}]<br>*Required* <br> Note : The attribute mapping (Ex:'mapping':''tableMappingName1') is an optional attribute. During ingestion, Azure Data Explorer automatically maps column according to the ingestion format. The `topic` field also supports `*` as a wildcard for any topic not explicitly mapped. |
 | 11 | key.converter                                | Deserialization                                                                               | One of the below supported-<br>org.apache.kafka.connect.storage.StringConverter<br> org.apache.kafka.connect.json.JsonConverter<br>io.confluent.connect.avro.AvroConverter<br>io.confluent.connect.json.JsonSchemaConverter<br>*Required*                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 12 | value.converter                              | Deserialization                                                                               | One of the below supported-<br>org.apache.kafka.connect.storage.StringConverter<br> org.apache.kafka.connect.json.JsonConverter<br>io.confluent.connect.avro.AvroConverter<br>io.confluent.connect.json.JsonSchemaConverter<br>*Required*                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 13 | value.converter.schema.registry.url          | Schema validation                                                                             | URI of the Kafka schema registry<br>*Optional*                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -385,7 +418,7 @@ https://github.com/microsoft/kafka-sink-ms-fabric/releases
 
 The dependencies are-
 
-* JDK >= 21 [download](https://www.oracle.com/technetwork/java/javase/downloads/index.html)
+* JDK >= 17 [download](https://www.oracle.com/technetwork/java/javase/downloads/index.html)
 * Maven [download](https://maven.apache.org/install.html)
 
 **1. Clone the repo**<br>
@@ -435,7 +468,8 @@ connector aspect.
 | 1.1.0           | 2024-01-21   | <ul><li>Add additional headers for DLQ support</li><br/><li>Bump Kusto SDK version</li></ul>          |  
 | 1.2.0           | 2024-01-31   | <ul><li>Support for optional field dynamicPayload</li></ul>                                           |  
 | 2.0.0           | 2025-09-18   | <ul><li>**Breaking change:** Updated all dependencies. This is built and tested on Java 21.</li></ul> |  
-| 2.0.1           | 2025-09-26   | <ul><li>Add additional attribute **enqueuedTime** as a field in kafkamd field</li></ul>               |  
+| 2.0.1           | 2025-09-26   | <ul><li>Add additional attribute **enqueuedTime** as a field in kafkamd field</li></ul>               |
+| 2.1.0           | TBD          | <ul><li>Sync with Azure/kafka-sink-azure-kusto 5.3.7</li><li>Build on Java 17; Kafka 4.1.1, Kusto SDK 7.0.5, patched Netty / Jackson</li><li>Validate Eventhouse endpoint URLs (SSRF protection)</li><li>Wildcard `*` topic mapping</li><li>JMX metrics per task</li><li>CI: split unit / integration workflows, OSV-Scanner, Dependabot, SHA-pinned actions</li></ul> |  
 
 ## 12. Contributing
 

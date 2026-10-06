@@ -8,42 +8,73 @@
     <artifactId>kafka-sink-ms-fabric</artifactId>
     <packaging>jar</packaging>
     <description>A Kafka Connect plugin for MS Fabric</description>
-    <version>2.0.1</version>
+    <version>2.1.0</version>
     <properties>
         <!-- Compile scope -->
-        <az.core.version>1.55.3</az.core.version>
-        <az.identity.version>1.14.2</az.identity.version>
-        <az.netty.version>1.16.1</az.netty.version>
-        <commoncodec.version>1.19.0</commoncodec.version>
-        <commonio.version>2.20.0</commonio.version>
+        <az.core.version>1.57.0</az.core.version>
+        <az.identity.version>1.18.1</az.identity.version>
+        <az.netty.version>1.16.2</az.netty.version>
+        <commoncodec.version>1.20.0</commoncodec.version>
+        <commonio.version>2.21.0</commonio.version>
         <commonstext.version>1.14.0</commonstext.version>
         <eventhubs.version>5.19.2</eventhubs.version>
-        <kusto.sdk.version>7.0.3</kusto.sdk.version>
+        <kusto.sdk.version>7.0.5</kusto.sdk.version>
         <kusto.shade.prefix>kusto_connector_shaded</kusto.shade.prefix>
         <msal4j.version>1.23.1</msal4j.version>
-        <kafka.version>3.9.1</kafka.version>
-        <kafka.connect.avro.converter.version>8.0.0</kafka.connect.avro.converter.version>
+        <kafka.version>4.1.1</kafka.version>
+        <kafka.connect.avro.converter.version>8.1.1</kafka.connect.avro.converter.version>
+        <!-- Previously transitive via kusto-sdk <= 7.0.3; required by TopicPartitionWriter retries -->
+        <resilience4j.version>1.7.1</resilience4j.version>
+        <vavr.version>0.10.4</vavr.version>
+        <!-- jackson-bom 2.21.7 remediates CVE-2026-89407, CVE-2026-89425, CVE-2026-68497,
+             CVE-2026-91776, CVE-2026-91777, CVE-2026-19032 and CVE-2026-83557
+             (kept in sync with Azure/kafka-sink-azure-kusto 5.3.7). -->
+        <jackson.version>2.21.7</jackson.version>
+        <!-- netty-bom 4.2.17.Final remediates CVE-2026-59903 and the earlier 4.2.16.Final set
+             (kept in sync with Azure/kafka-sink-azure-kusto 5.3.7).
+             See https://github.com/netty/netty/security/advisories -->
+        <netty.version>4.2.17.Final</netty.version>
         <!-- Provided scope -->
         <!-- (none unique, uses kafka/kafka.connect.avro.converter above) -->
         <!-- Test scope -->
         <avro.random.generator.version>0.4.1</avro.random.generator.version>
         <awaitility.version>4.3.0</awaitility.version>
-        <jsonassert.version>1.5.1</jsonassert.version>
+        <jsonassert.version>1.5.3</jsonassert.version>
         <json.converter.version>0.3.0</json.converter.version>
         <junit.version>5.11.4</junit.version>
-        <mockito.version>5.19.0</mockito.version>
-        <testcontainer.version>1.21.3</testcontainer.version>
+        <mockito.version>5.21.0</mockito.version>
+        <testcontainer.version>1.21.4</testcontainer.version>
         <!-- Plugin/tooling -->
-        <dependency-check-maven.version>12.1.3</dependency-check-maven.version>
+        <dependency-check-maven.version>12.1.9</dependency-check-maven.version>
         <formatter.version>2.46.1</formatter.version>
         <impsort.version>1.6.2</impsort.version>
         <maven.shade.plugin.version>3.6.1</maven.shade.plugin.version>
-        <mvn.compiler.plugin.version>3.14.0</mvn.compiler.plugin.version>
+        <mvn.compiler.plugin.version>3.14.1</mvn.compiler.plugin.version>
         <mvn.failsafe.plugin.version>3.5.4</mvn.failsafe.plugin.version>
         <kafka.connect.maven.plugin.version>0.12.0</kafka.connect.maven.plugin.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <java.release.version>21</java.release.version>
+        <java.release.version>17</java.release.version>
     </properties>
+    <dependencyManagement>
+        <dependencies>
+            <!-- Pin netty-bom so all io.netty:* modules resolve to the same patched release -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <!-- Pin jackson-bom so all com.fasterxml.jackson.* modules resolve to the same patched release -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
     <build>
         <plugins>
             <plugin>
@@ -460,6 +491,25 @@
                     <groupId>com.microsoft.azure</groupId>
                     <artifactId>msal4j</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>com.azure</groupId>
+                    <artifactId>azure-identity</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-identity</artifactId>
+            <version>${az.identity.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.azure</groupId>
+                    <artifactId>azure-core-http-netty</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.microsoft.azure</groupId>
+                    <artifactId>msal4j</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
         <dependency>
@@ -470,6 +520,10 @@
                 <exclusion>
                     <groupId>com.azure</groupId>
                     <artifactId>azure-core</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>com.azure</groupId>
+                    <artifactId>azure-identity</artifactId>
                 </exclusion>
                 <exclusion>
                     <groupId>com.azure</groupId>
@@ -505,6 +559,21 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-text</artifactId>
             <version>${commonstext.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-core</artifactId>
+            <version>${resilience4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-retry</artifactId>
+            <version>${resilience4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.vavr</groupId>
+            <artifactId>vavr</artifactId>
+            <version>${vavr.version}</version>
         </dependency>
         <!-- Provided scopes -->
         <dependency>

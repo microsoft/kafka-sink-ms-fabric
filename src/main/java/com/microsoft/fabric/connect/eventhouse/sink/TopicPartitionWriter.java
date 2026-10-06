@@ -28,6 +28,7 @@ import com.microsoft.azure.kusto.ingest.result.IngestionStatusResult;
 import com.microsoft.azure.kusto.ingest.source.FileSourceInfo;
 import com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig.BehaviorOnError;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.KafkaRecordErrorReporter;
+import com.microsoft.fabric.connect.eventhouse.sink.dlq.NoOpLoggerErrorReporter;
 import com.microsoft.fabric.connect.eventhouse.sink.formatwriter.FormatWriterHelper;
 
 import io.github.resilience4j.core.IntervalFunction;
@@ -56,15 +57,26 @@ public class TopicPartitionWriter {
     private final boolean isDlqEnabled;
     private final Retry ingestionRetry;
     private final FabricSinkConfig fabricSinkConfig;
+    private final FabricSinkMetrics metrics;
 
     public TopicPartitionWriter(TopicPartition tp, IngestClient client,
             @NotNull TopicIngestionProperties ingestionProps,
             @NotNull FabricSinkConfig config,
             boolean isDlqEnabled,
             @NotNull KafkaRecordErrorReporter errorReporter) {
+        this(tp, client, ingestionProps, config, isDlqEnabled, errorReporter, null);
+    }
+
+    public TopicPartitionWriter(TopicPartition tp, IngestClient client,
+            @NotNull TopicIngestionProperties ingestionProps,
+            @NotNull FabricSinkConfig config,
+            boolean isDlqEnabled,
+            @NotNull KafkaRecordErrorReporter errorReporter,
+            @Nullable FabricSinkMetrics metrics) {
         this.tp = tp;
         this.client = client;
         this.ingestionProps = ingestionProps;
+        this.metrics = metrics;
         this.fileThreshold = config.getFlushSizeBytes();
         this.basePath = getTempDirectoryName(config.getTempDirPath());
         this.flushInterval = config.getFlushInterval();
@@ -118,17 +130,35 @@ public class TopicPartitionWriter {
          * into DLQ topic. Recommendation is to set the following worker configuration as `connector.client.config.override.policy=All` and set the
          * `consumer.override.max.poll.interval.ms` config to a high enough value to avoid consumer leaving the group while the Connector is retrying.
          */
-        this.ingestionRetry.executeTrySupplier(() -> Try.of(() -> this.client.ingestFromFile(fileSourceInfo, updateIngestionPropertiesWithTargetFormat())))
+        this.ingestionRetry.executeTrySupplier(() -> Try.of(() -> {
+            if (metrics != null) {
+                metrics.incrementIngestionAttempts();
+            }
+            return this.client.ingestFromFile(fileSourceInfo, updateIngestionPropertiesWithTargetFormat());
+        }))
                 .onSuccess(ingestionStatusResult -> {
                     this.lastCommittedOffset = currentOffset;
+                    if (metrics != null) {
+                        metrics.incrementIngestionSuccesses();
+                    }
                     LOGGER.debug("Ingestion status: {} for file {} with ID {} .Committed offset {} ", ingestionStatusResult,
                             fileDescriptor.path, fileSourceId, lastCommittedOffset);
                 })
                 .onFailure(ex -> {
+                    if (metrics != null) {
+                        metrics.incrementIngestionFailures();
+                    }
                     if (behaviorOnError != BehaviorOnError.FAIL) {
-                        fileDescriptor.records.forEach(sinkRecord -> this.errorReporter.reportError(sinkRecord, new ConnectException(ex)));
+                        fileDescriptor.records.forEach(sinkRecord -> reportError(sinkRecord, new ConnectException(ex)));
                     }
                 });
+    }
+
+    private void reportError(SinkRecord sinkRecord, Exception ex) {
+        if (metrics != null && !(errorReporter instanceof NoOpLoggerErrorReporter)) {
+            metrics.incrementDlqRecordsSent();
+        }
+        this.errorReporter.reportError(sinkRecord, ex);
     }
 
     private static boolean isPermanentException(@NotNull IngestionServiceException exception) {
@@ -188,7 +218,13 @@ public class TopicPartitionWriter {
             try (AutoCloseableLock ignored = new AutoCloseableLock(reentrantReadWriteLock.readLock())) {
                 this.currentOffset = sinkRecord.kafkaOffset();
                 fileWriter.writeData(sinkRecord, headerTransforms);
+                if (metrics != null) {
+                    metrics.incrementRecordsWritten();
+                }
             } catch (IOException | DataException ex) {
+                if (metrics != null) {
+                    metrics.incrementRecordsFailed();
+                }
                 handleErrors(sinkRecord, ex);
             }
         }
@@ -199,7 +235,7 @@ public class TopicPartitionWriter {
             throw new ConnectException(FILE_EXCEPTION_MESSAGE, ex);
         } else {
             LOGGER.debug(FILE_EXCEPTION_MESSAGE, ex);
-            this.errorReporter.reportError(sinkRecord, ex);
+            reportError(sinkRecord, ex);
         }
     }
 

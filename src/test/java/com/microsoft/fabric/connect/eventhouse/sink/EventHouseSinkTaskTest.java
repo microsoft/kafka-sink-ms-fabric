@@ -14,9 +14,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-import org.apache.log4j.spi.LoggingEvent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +23,6 @@ import org.slf4j.LoggerFactory;
 
 import com.microsoft.azure.kusto.ingest.IngestClient;
 import com.microsoft.azure.kusto.ingest.IngestionProperties;
-import com.microsoft.fabric.connect.eventhouse.sink.appender.TestAppender;
 
 import static com.microsoft.fabric.connect.eventhouse.sink.Utils.getCurrentWorkingDirectory;
 import static org.junit.jupiter.api.Assertions.*;
@@ -207,59 +203,20 @@ class EventHouseSinkTaskTest {
     }
 
     @Test
-    void testStopWriterFailure() throws IOException {
-        // set-up
-        final TestAppender appender = new TestAppender();
-        final Logger logger = Logger.getRootLogger();
-        logger.addAppender(appender);
-        try {
-            Logger.getLogger(EventHouseSinkTask.class).error("Error closing kusto client");
-        } finally {
-            logger.removeAppender(appender);
-            logger.removeAllAppenders();
-        }
-        // easy to set it this way than mock
-        TopicPartition mockPartition = new TopicPartition("test-topic", 1);
-        TopicPartitionWriter mockPartitionWriter = mock(TopicPartitionWriter.class);
-        doThrow(RuntimeException.class).when(mockPartitionWriter).close();
-        IngestClient mockClient = mock(IngestClient.class);
-        doNothing().when(mockClient).close();
-        EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
-        // There is no mutate constructor
-        eventHouseSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
-        eventHouseSinkTask.kustoIngestClient = mockClient;
-        final List<LoggingEvent> log = appender.getLog();
-        final LoggingEvent firstLogEntry = log.getFirst();
-        assertEquals(firstLogEntry.getLevel().toString(), Level.ERROR.toString());
-        assertEquals("Error closing kusto client", firstLogEntry.getMessage());
-    }
-
-    @Test
     public void testStopSinkTaskFailure() throws IOException {
-        // set-up
-        final TestAppender appender = new TestAppender();
-        final Logger logger = Logger.getRootLogger();
-        logger.addAppender(appender);
-        try {
-            Logger.getLogger(EventHouseSinkTask.class).error("Error closing kusto client");
-        } finally {
-            logger.removeAppender(appender);
-            logger.removeAllAppenders();
-        }
-        // easy to set it this way than mock
+        // Closing the ingest client fails; stop() must log and still complete after closing writers
         TopicPartition mockPartition = new TopicPartition("test-topic", 2);
         TopicPartitionWriter mockPartitionWriter = mock(TopicPartitionWriter.class);
         doNothing().when(mockPartitionWriter).close();
         IngestClient mockClient = mock(IngestClient.class);
         doThrow(IOException.class).when(mockClient).close();
         EventHouseSinkTask eventHouseSinkTask = new EventHouseSinkTask();
-        // There is no mutate constructor
         eventHouseSinkTask.writers = Collections.singletonMap(mockPartition, mockPartitionWriter);
         eventHouseSinkTask.kustoIngestClient = mockClient;
-        final List<LoggingEvent> log = appender.getLog();
-        final LoggingEvent firstLogEntry = log.getFirst();
-        assertEquals(firstLogEntry.getLevel().toString(), Level.ERROR.toString());
-        assertEquals("Error closing kusto client", firstLogEntry.getMessage());
+        assertDoesNotThrow(eventHouseSinkTask::stop);
+        verify(mockPartitionWriter, times(1)).stop();
+        verify(mockPartitionWriter, times(1)).close();
+        verify(mockClient, times(1)).close();
     }
 
     @Test
