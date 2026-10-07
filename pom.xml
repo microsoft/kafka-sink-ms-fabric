@@ -33,7 +33,7 @@
         <!-- netty-bom 4.2.17.Final remediates CVE-2026-59903 and the earlier 4.2.16.Final set
              (kept in sync with Azure/kafka-sink-azure-kusto 5.3.7).
              See https://github.com/netty/netty/security/advisories -->
-        <netty.version>4.2.17.Final</netty.version>
+        <netty.version>4.2.18.Final</netty.version>
         <!-- Provided scope -->
         <!-- (none unique, uses kafka/kafka.connect.avro.converter above) -->
         <!-- Test scope -->
