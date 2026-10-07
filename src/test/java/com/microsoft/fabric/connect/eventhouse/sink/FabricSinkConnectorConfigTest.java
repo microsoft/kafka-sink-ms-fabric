@@ -18,8 +18,8 @@ import static com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig.KUST
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class FabricSinkConnectorConfigTest {
-    private static final String DM_URL = "https://ingest-cluster_name.kusto.windows.net";
-    private static final String ENGINE_URL = "https://cluster_name.kusto.windows.net";
+    private static final String DM_URL = "https://ingest-clustername.kusto.windows.net";
+    private static final String ENGINE_URL = "https://clustername.kusto.windows.net";
 
     @Test
     void shouldAcceptValidConfig() {
@@ -200,6 +200,25 @@ public class FabricSinkConnectorConfigTest {
 
     private void invokeGetTopicToTableMapping(HashMap<String, String> settings) throws JsonProcessingException {
         new FabricSinkConfig(settings).getTopicToTableMapping();
+    }
+
+    @Test
+    public void shouldFallBackToWildcardTopicMapping() throws JsonProcessingException {
+        HashMap<String, String> settings = setupConfigs();
+        settings.put(FabricSinkConfig.KUSTO_TABLES_MAPPING_CONF,
+                "[{'topic': 'topic1','db': 'db1', 'table': 'table1','format': 'csv'},{'topic': '*','db': 'dbAll', 'table': 'tableAll','format': 'json'}]");
+        FabricSinkConfig config = new FabricSinkConfig(settings);
+        config.getTopicToTableMapping();
+        Assertions.assertEquals("table1", config.getTopicToTableMapping("topic1").getTable());
+        Assertions.assertEquals("tableAll", config.getTopicToTableMapping("any-other-topic").getTable());
+        Assertions.assertEquals("dbAll", config.getTopicToTableMapping("any-other-topic").getDb());
+    }
+
+    @Test
+    public void shouldReturnNullWithoutWildcardTopicMapping() throws JsonProcessingException {
+        FabricSinkConfig config = new FabricSinkConfig(setupConfigs());
+        config.getTopicToTableMapping();
+        Assertions.assertNull(config.getTopicToTableMapping("unmapped-topic"));
     }
 
     public static @NotNull HashMap<String, String> setupConfigs() {

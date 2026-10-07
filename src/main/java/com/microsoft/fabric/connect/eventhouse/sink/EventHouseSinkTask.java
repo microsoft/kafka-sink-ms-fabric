@@ -50,6 +50,7 @@ public class EventHouseSinkTask extends SinkTask {
     private Map<String, TopicIngestionProperties> topicsToIngestionProps;
     private HeaderTransforms headerTransforms;
     private FabricSinkConfig config;
+    private FabricSinkMetrics metrics;
     private boolean isDlqEnabled;
 
     public EventHouseSinkTask() {
@@ -62,6 +63,10 @@ public class EventHouseSinkTask extends SinkTask {
     }
 
     public static @NotNull ConnectionStringBuilder createKustoEngineConnectionString(@NotNull final FabricSinkConfig config, final String clusterUrl) {
+        // Defense-in-depth: validate the URL before credentials are attached to it
+        if (!config.isEventStreamConnectionString()) {
+            KustoEndpointUrlValidator.validateEndpointUrl(clusterUrl, "clusterUrl");
+        }
         final ConnectionStringBuilder connectionStringBuilder;
         switch (config.getAuthStrategy()) {
             case APPLICATION:
@@ -76,6 +81,8 @@ public class EventHouseSinkTask extends SinkTask {
                     // adding the auth from the code specifically
                 } else if (!StringUtils.isEmpty(config.getConnectionString())) {
                     connectionStringBuilder = new ConnectionStringBuilder(config.getConnectionString());
+                    // The connection string's own Data Source is used here, so it must be trusted as well
+                    KustoEndpointUrlValidator.validateEndpointUrl(connectionStringBuilder.getClusterUrl(), FabricSinkConfig.CONNECTION_STRING);
                 } else {
                     throw new ConfigException("Kusto authentication missing App Key.");
                 }
@@ -173,7 +180,11 @@ public class EventHouseSinkTask extends SinkTask {
     }
 
     public TopicIngestionProperties getIngestionProps(String topic) {
-        return topicsToIngestionProps.get(topic);
+        TopicIngestionProperties props = topicsToIngestionProps.get(topic);
+        if (props == null) {
+            props = topicsToIngestionProps.get("*");
+        }
+        return props;
     }
 
     @Override
@@ -193,7 +204,7 @@ public class EventHouseSinkTask extends SinkTask {
             } else {
                 IngestClient client = ingestionProps.streaming ? streamingIngestClient : kustoIngestClient;
                 TopicPartitionWriter writer = new TopicPartitionWriter(tp, client, ingestionProps, config, isDlqEnabled,
-                        createKafkaRecordErrorReporter());
+                        createKafkaRecordErrorReporter(), metrics);
                 writer.open();
                 writers.put(tp, writer);
             }
@@ -227,6 +238,7 @@ public class EventHouseSinkTask extends SinkTask {
         topicsToIngestionProps = getTopicsToIngestionProps(config);
         // this should be read properly from settings
         createKustoIngestClient(config);
+        metrics = new FabricSinkMetrics(props.get("name"));
         LOGGER.info("Started KustoSinkTask with target cluster: ({}), source topics: ({})", url,
                 topicsToIngestionProps.keySet());
         // Adding this check to make code testable
@@ -252,6 +264,10 @@ public class EventHouseSinkTask extends SinkTask {
             }
         } catch (IOException e) {
             LOGGER.error("Error closing kusto client", e);
+        }
+        if (metrics != null) {
+            metrics.close();
+            metrics = null;
         }
     }
 

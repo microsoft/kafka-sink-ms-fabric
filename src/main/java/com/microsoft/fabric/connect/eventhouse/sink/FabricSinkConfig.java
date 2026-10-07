@@ -71,7 +71,8 @@ public class FabricSinkConfig extends AbstractConfig {
     private static final String KUSTO_AUTH_STRATEGY_DISPLAY = "Kusto Auth Strategy";
     private static final String KUSTO_TABLES_MAPPING_DOC = """
             A JSON array mapping ingestion from topic to table, e.g: \
-            [{'topic1':'t1','db':'kustoDb', 'table': 'table1', 'format': 'csv', 'mapping': 'csvMapping', 'streaming': 'false'}..].
+            [{'topic':'topic1','db':'kustoDb', 'table': 'table1', 'format': 'csv', 'mapping': 'csvMapping', 'streaming': 'false'}..].
+            The 'topic' field also supports '*' as a wildcard. If a record's topic is not explicitly mapped, the wildcard mapping (if present) will be used.
             Streaming is optional, defaults to false. Mind usage and cogs of streaming ingestion, read here: https://docs.microsoft.com/en-us/azure/data-explorer/ingest-data-streaming.
             Note: If the streaming ingestion fails transiently,\
              queued ingest would apply for this specific batch ingestion. Batching latency is configured regularly via\
@@ -126,10 +127,38 @@ public class FabricSinkConfig extends AbstractConfig {
 
     public FabricSinkConfig(ConfigDef config, Map<String, String> parsedConfig) {
         super(config, parsedConfig);
+        validateEndpointUrls();
     }
 
     public FabricSinkConfig(Map<String, String> parsedConfig) {
         this(getConfig(), parsedConfig);
+    }
+
+    boolean isEventStreamConnectionString() {
+        String connectionString = getConnectionString();
+        return StringUtils.isNotBlank(connectionString) && connectionString.startsWith("sb://");
+    }
+
+    /**
+     * Validates that configured Eventhouse endpoint URLs (explicit or derived from the Kusto connection string)
+     * point to trusted Azure Data Explorer / Fabric domains, to prevent SSRF token exfiltration.
+     * EventStream (sb://) connection strings are not Kusto endpoints and are skipped.
+     */
+    private void validateEndpointUrls() {
+        if (isEventStreamConnectionString()) {
+            return;
+        }
+        String ingestUrl = this.getString(KUSTO_INGEST_URL_CONF);
+        String engineUrl = this.getString(KUSTO_ENGINE_URL_CONF);
+        boolean hasConnectionString = StringUtils.isNotBlank(getConnectionString());
+        if (StringUtils.isBlank(ingestUrl) && hasConnectionString) {
+            ingestUrl = getUrlFromConnectionString(false);
+        }
+        if (StringUtils.isBlank(engineUrl) && hasConnectionString) {
+            engineUrl = getUrlFromConnectionString(true);
+        }
+        KustoEndpointUrlValidator.validateEndpointUrl(ingestUrl, KUSTO_INGEST_URL_CONF);
+        KustoEndpointUrlValidator.validateEndpointUrl(engineUrl, KUSTO_ENGINE_URL_CONF);
     }
 
     public static @NotNull ConfigDef getConfig() {
@@ -494,7 +523,8 @@ public class FabricSinkConfig extends AbstractConfig {
     // This is a redundant parser. However it is not a huge penalty that is incurred here on parse once or couple of times
     // Not making this synchronized in purpose
     public TopicToTableMapping getTopicToTableMapping(String topic) {
-        return topicToTableMappingProperties.get(topic);
+        TopicToTableMapping mapping = topicToTableMappingProperties.get(topic);
+        return mapping != null ? mapping : topicToTableMappingProperties.get("*");
     }
 
     public HeaderTransforms headerTransforms() throws JsonProcessingException {

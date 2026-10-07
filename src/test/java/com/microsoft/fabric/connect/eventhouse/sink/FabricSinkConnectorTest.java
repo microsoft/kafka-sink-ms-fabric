@@ -13,8 +13,8 @@ public class FabricSinkConnectorTest {
     public void testStart() {
         FabricSinkConnector fabricSinkConnector = new FabricSinkConnector();
         Map<String, String> mockProps = new HashMap<>();
-        mockProps.put("kusto.ingestion.url", "testValue");
-        mockProps.put("kusto.query.url", "testValue");
+        mockProps.put("kusto.ingestion.url", "https://ingest-cluster.kusto.windows.net");
+        mockProps.put("kusto.query.url", "https://cluster.kusto.windows.net");
         mockProps.put("aad.auth.appkey", "testValue");
         mockProps.put("aad.auth.appid", "testValue");
         mockProps.put("aad.auth.authority", "testValue");
@@ -31,8 +31,8 @@ public class FabricSinkConnectorTest {
         FabricSinkConnector fabricSinkConnector = new FabricSinkConnector();
 
         Map<String, String> mockProps = new HashMap<>();
-        mockProps.put("kusto.ingestion.url", "testValue");
-        mockProps.put("kusto.query.url", "testValue");
+        mockProps.put("kusto.ingestion.url", "https://ingest-cluster.kusto.windows.net");
+        mockProps.put("kusto.query.url", "https://cluster.kusto.windows.net");
         mockProps.put("aad.auth.appkey", "testValue");
         mockProps.put("aad.auth.appid", "testValue");
         mockProps.put("aad.auth.authority", "testValue");
