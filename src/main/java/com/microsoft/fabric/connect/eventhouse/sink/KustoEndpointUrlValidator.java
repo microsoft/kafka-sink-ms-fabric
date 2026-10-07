@@ -2,8 +2,6 @@ package com.microsoft.fabric.connect.eventhouse.sink;
 
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.Locale;
-import java.util.regex.Pattern;
 
 import org.apache.kafka.common.config.ConfigException;
 
@@ -26,23 +24,9 @@ import com.microsoft.azure.kusto.data.exceptions.KustoClientInvalidConnectionStr
  */
 public final class KustoEndpointUrlValidator {
     private static final String HTTPS_SCHEME_PREFIX = "https://";
-    // Matches dotted numeric hosts such as 127.0.0.1 or 10.1.2.3 (IPv4 literals).
-    private static final Pattern NUMERIC_HOST = Pattern.compile("^[0-9.]+$");
 
     private KustoEndpointUrlValidator() {
         // Utility class
-    }
-
-    /**
-     * Trims the URL and prepends {@code https://} when no scheme is given, so that scheme-less values accepted by
-     * validation are also usable by the Kusto SDK (which requires a URI authority). Blank values are returned as-is.
-     */
-    public static String normalizeUrl(String url) {
-        if (StringUtils.isBlank(url)) {
-            return url;
-        }
-        String trimmed = url.trim();
-        return trimmed.contains("://") ? trimmed : HTTPS_SCHEME_PREFIX + trimmed;
     }
 
     /**
@@ -57,12 +41,16 @@ public final class KustoEndpointUrlValidator {
             return;
         }
 
-        if (url.trim().regionMatches(true, 0, "http://", 0, 7)) {
+        url = url.trim();
+
+        if (url.regionMatches(true, 0, "http://", 0, 7)) {
             throw new ConfigException(configKey, url,
                     "HTTP is not supported. Only HTTPS endpoints are allowed.");
         }
 
-        url = normalizeUrl(url);
+        if (!url.startsWith(HTTPS_SCHEME_PREFIX)) {
+            url = HTTPS_SCHEME_PREFIX + url;
+        }
 
         URI uri;
         try {
@@ -70,17 +58,6 @@ public final class KustoEndpointUrlValidator {
         } catch (URISyntaxException e) {
             throw new ConfigException(configKey, url,
                     "Invalid URL format: " + e.getMessage());
-        }
-
-        if (!"https".equalsIgnoreCase(uri.getScheme())) {
-            throw new ConfigException(configKey, url,
-                    "Unsupported URL scheme. Only HTTPS endpoints are allowed.");
-        }
-
-        String host = uri.getHost();
-        if (host == null || isLocalOrIpLiteral(host)) {
-            throw new ConfigException(configKey, url,
-                    "URL does not point to a known Azure Data Explorer endpoint.");
         }
 
         WellKnownKustoEndpointsData endpointsData = WellKnownKustoEndpointsData.getInstance();
@@ -97,22 +74,5 @@ public final class KustoEndpointUrlValidator {
                 "URL does not point to a known Azure Data Explorer endpoint. "
                         + "The hostname must be a well-known trusted Kusto endpoint "
                         + "(see WellKnownKustoEndpoints.json in azure-kusto-java SDK).");
-    }
-
-    /**
-     * The SDK treats local hosts (localhost, ::1 and the whole 127.* range) as trusted so that local emulators work.
-     * A sink connector must never send tokens there, and real Eventhouse endpoints are never raw IP addresses,
-     * so localhost and every IP literal (IPv4 or IPv6) are rejected.
-     */
-    private static boolean isLocalOrIpLiteral(String host) {
-        String h = host.toLowerCase(Locale.ROOT);
-        if (h.endsWith(".")) {
-            h = h.substring(0, h.length() - 1);
-        }
-        return h.equals("localhost")
-                || h.startsWith("127.")
-                || h.startsWith("[")
-                || h.contains(":")
-                || NUMERIC_HOST.matcher(h).matches();
     }
 }

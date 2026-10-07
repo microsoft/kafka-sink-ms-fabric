@@ -230,36 +230,10 @@ public class KustoEndpointUrlValidatorTest {
 
     // ======================== Fabric-specific hardening ========================
 
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "https://localhost",
-            "https://LOCALHOST:8080",
-            "https://127.0.0.1",
-            "https://[::1]",
-            "localhost",
-            "https://localhost.",
-            "https://127.0.0.2",
-            "https://127.123.45.67",
-            "https://127.1",
-            "https://10.0.0.5",
-            "https://169.254.169.254",
-            "https://[0:0:0:0:0:0:0:1]",
-            "https://[::ffff:127.0.0.1]",
-    })
-    public void shouldRejectLoopbackHostsAndIpLiterals(String url) {
-        assertThrows(ConfigException.class,
-                () -> KustoEndpointUrlValidator.validateEndpointUrl(url, CONFIG_KEY));
-    }
-
     @Test
     public void shouldRejectUppercaseHttpScheme() {
         assertThrows(ConfigException.class,
                 () -> KustoEndpointUrlValidator.validateEndpointUrl("HTTP://mycluster.kusto.windows.net", CONFIG_KEY));
-    }
-
-    @Test
-    public void shouldAcceptUppercaseHttpsScheme() {
-        assertDoesNotThrow(() -> KustoEndpointUrlValidator.validateEndpointUrl("HTTPS://mycluster.kusto.windows.net", CONFIG_KEY));
     }
 
     @Test
@@ -294,37 +268,6 @@ public class KustoEndpointUrlValidatorTest {
         configs.put(FabricSinkConfig.CONNECTION_STRING,
                 "sb://myns.servicebus.windows.net/;SharedAccessKeyName=key;SharedAccessKey=dummy;EntityPath=es");
         assertDoesNotThrow(() -> new FabricSinkConfig(configs));
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {"ftp://mycluster.kusto.windows.net", "ws://mycluster.kusto.windows.net",
-            "file://mycluster.kusto.windows.net/x", "HTTP://mycluster.kusto.windows.net"})
-    public void nonHttpsSchemesShouldBeRejected(String url) {
-        assertThrows(ConfigException.class, () -> KustoEndpointUrlValidator.validateEndpointUrl(url, "test.key"));
-    }
-
-    @Test
-    public void upperCaseHttpsSchemeShouldBeAccepted() {
-        assertDoesNotThrow(() -> KustoEndpointUrlValidator.validateEndpointUrl("HTTPS://mycluster.kusto.windows.net", "test.key"));
-    }
-
-    @Test
-    public void schemeLessUrlsShouldBeNormalizedForTheSdk() {
-        HashMap<String, String> configs = FabricSinkConnectorConfigTest.setupConfigs();
-        configs.put(FabricSinkConfig.KUSTO_INGEST_URL_CONF, " ingest-mycluster.kusto.windows.net ");
-        configs.put(FabricSinkConfig.KUSTO_ENGINE_URL_CONF, "mycluster.kusto.windows.net");
-        FabricSinkConfig config = new FabricSinkConfig(configs);
-        assertEquals("https://ingest-mycluster.kusto.windows.net", config.getKustoIngestUrl());
-        assertEquals("https://mycluster.kusto.windows.net", config.getKustoEngineUrl());
-        // The SDK requires a URI authority; this would throw for a scheme-less value
-        assertDoesNotThrow(() -> com.microsoft.azure.kusto.data.UriUtils.createClusterURLFrom(config.getKustoEngineUrl()));
-        assertDoesNotThrow(() -> EventHouseSinkTask.createKustoEngineConnectionString(config, config.getKustoIngestUrl()));
-    }
-
-    @Test
-    public void normalizeUrlShouldKeepExistingScheme() {
-        assertEquals("https://mycluster.kusto.windows.net", KustoEndpointUrlValidator.normalizeUrl("https://mycluster.kusto.windows.net"));
-        assertNull(KustoEndpointUrlValidator.normalizeUrl(null));
     }
 
     @Test

@@ -25,7 +25,6 @@ import com.microsoft.azure.kusto.ingest.IngestionProperties;
 import com.microsoft.azure.kusto.ingest.exceptions.IngestionServiceException;
 import com.microsoft.azure.kusto.ingest.result.IngestionStatus;
 import com.microsoft.azure.kusto.ingest.result.IngestionStatusResult;
-import com.microsoft.azure.kusto.ingest.result.OperationStatus;
 import com.microsoft.azure.kusto.ingest.source.FileSourceInfo;
 import com.microsoft.fabric.connect.eventhouse.sink.FabricSinkConfig.BehaviorOnError;
 import com.microsoft.fabric.connect.eventhouse.sink.dlq.KafkaRecordErrorReporter;
@@ -140,12 +139,7 @@ public class TopicPartitionWriter {
                 .onSuccess(ingestionStatusResult -> {
                     this.lastCommittedOffset = currentOffset;
                     if (metrics != null) {
-                        // Retry hands back the last result even when it is still a failed streaming status
-                        if (isFailedStatusResult(ingestionStatusResult)) {
-                            metrics.incrementIngestionFailures();
-                        } else {
-                            metrics.incrementIngestionSuccesses();
-                        }
+                        metrics.incrementIngestionSuccesses();
                     }
                     LOGGER.debug("Ingestion status: {} for file {} with ID {} .Committed offset {} ", ingestionStatusResult,
                             fileDescriptor.path, fileSourceId, lastCommittedOffset);
@@ -158,19 +152,6 @@ public class TopicPartitionWriter {
                         fileDescriptor.records.forEach(sinkRecord -> reportError(sinkRecord, new ConnectException(ex)));
                     }
                 });
-    }
-
-    static boolean isFailedStatusResult(Object result) {
-        if (!(result instanceof IngestionStatusResult isr)) {
-            return false;
-        }
-        try {
-            return isr.getIngestionStatusCollection().stream().findFirst()
-                    .map(status -> status.status == OperationStatus.Failed)
-                    .orElse(false);
-        } catch (URISyntaxException e) {
-            return false;
-        }
     }
 
     private void reportError(SinkRecord sinkRecord, Exception ex) {
