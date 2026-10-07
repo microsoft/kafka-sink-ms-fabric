@@ -29,7 +29,7 @@
         <!-- jackson-bom 2.21.7 remediates CVE-2026-89407, CVE-2026-89425, CVE-2026-68497,
              CVE-2026-91776, CVE-2026-91777, CVE-2026-19032 and CVE-2026-83557
              (kept in sync with Azure/kafka-sink-azure-kusto 5.3.7). -->
-        <jackson.version>2.21.7</jackson.version>
+        <jackson.version>2.22.3</jackson.version>
         <!-- netty-bom 4.2.17.Final remediates CVE-2026-59903 and the earlier 4.2.16.Final set
              (kept in sync with Azure/kafka-sink-azure-kusto 5.3.7).
              See https://github.com/netty/netty/security/advisories -->
