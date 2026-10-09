@@ -20,7 +20,7 @@ jobs:
 - job: Integration
   displayName: Maven Verify (integration tests)
   timeoutInMinutes: 60
-  condition: and(succeeded(), ne(variables['System.PullRequest.IsFork'], 'True'))
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
   steps:
   - checkout: self
     clean: true
