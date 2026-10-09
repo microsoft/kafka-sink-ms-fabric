@@ -588,7 +588,9 @@ class EventHouseSinkIT {
         overrides.put("key.converter.schema.registry.url", srUrl);
         String targetTopic = "e2e.%s-err.topic".formatted(dataFormat);
         overrides.put("topics", targetTopic);
-        overrides.put("kusto.ingestion.url", coordinates.ingestCluster + ".xxx");
+        // Keep the trusted Kusto hostname suffix so validation succeeds, then fail at runtime through DNS.
+        String unreachableIngestCluster = coordinates.ingestCluster.replace("://", "://unreachable-");
+        overrides.put("kusto.ingestion.url", unreachableIngestCluster);
         deployConnector(dataFormat, topicTableMapping, srUrl,
                 keyFormat,
                 valueFormat,
