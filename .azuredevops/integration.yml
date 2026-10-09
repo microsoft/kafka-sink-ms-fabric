@@ -1,4 +1,4 @@
-# Temporary Azure Pipelines bootstrap for the CI and integration workflows.
+# Temporary Azure Pipelines bootstrap for .github/workflows/integration.yml.
 
 trigger:
 - main
