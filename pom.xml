@@ -14,9 +14,9 @@
         <az.core.version>1.57.0</az.core.version>
         <az.identity.version>1.18.1</az.identity.version>
         <az.netty.version>1.16.2</az.netty.version>
-        <commoncodec.version>1.20.0</commoncodec.version>
-        <commonio.version>2.21.0</commonio.version>
-        <commonstext.version>1.14.0</commonstext.version>
+        <commoncodec.version>1.22.1</commoncodec.version>
+        <commonio.version>2.22.0</commonio.version>
+        <commonstext.version>1.15.0</commonstext.version>
         <eventhubs.version>5.19.2</eventhubs.version>
         <kusto.sdk.version>7.0.5</kusto.sdk.version>
         <kusto.shade.prefix>kusto_connector_shaded</kusto.shade.prefix>
@@ -24,8 +24,8 @@
         <kafka.version>4.1.1</kafka.version>
         <kafka.connect.avro.converter.version>8.1.1</kafka.connect.avro.converter.version>
         <!-- Previously transitive via kusto-sdk <= 7.0.3; required by TopicPartitionWriter retries -->
-        <resilience4j.version>1.7.1</resilience4j.version>
-        <vavr.version>0.10.4</vavr.version>
+        <resilience4j.version>2.4.0</resilience4j.version>
+        <vavr.version>1.0.1</vavr.version>
         <!-- jackson-bom 2.21.7 remediates CVE-2026-89407, CVE-2026-89425, CVE-2026-68497,
              CVE-2026-91776, CVE-2026-91777, CVE-2026-19032 and CVE-2026-83557
              (kept in sync with Azure/kafka-sink-azure-kusto 5.3.7). -->
