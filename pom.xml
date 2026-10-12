@@ -12,15 +12,15 @@
     <properties>
         <!-- Compile scope -->
         <az.core.version>1.57.0</az.core.version>
-        <az.identity.version>1.18.1</az.identity.version>
-        <az.netty.version>1.16.2</az.netty.version>
+        <az.identity.version>1.18.7</az.identity.version>
+        <az.netty.version>1.16.8</az.netty.version>
         <commoncodec.version>1.20.0</commoncodec.version>
         <commonio.version>2.21.0</commonio.version>
         <commonstext.version>1.14.0</commonstext.version>
         <eventhubs.version>5.19.2</eventhubs.version>
-        <kusto.sdk.version>7.0.5</kusto.sdk.version>
+        <kusto.sdk.version>8.0.1</kusto.sdk.version>
         <kusto.shade.prefix>kusto_connector_shaded</kusto.shade.prefix>
-        <msal4j.version>1.23.1</msal4j.version>
+        <msal4j.version>1.26.0</msal4j.version>
         <kafka.version>4.1.1</kafka.version>
         <kafka.connect.avro.converter.version>8.1.1</kafka.connect.avro.converter.version>
         <!-- Previously transitive via kusto-sdk <= 7.0.3; required by TopicPartitionWriter retries -->
