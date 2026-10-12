@@ -21,8 +21,8 @@
         <kusto.sdk.version>7.0.5</kusto.sdk.version>
         <kusto.shade.prefix>kusto_connector_shaded</kusto.shade.prefix>
         <msal4j.version>1.23.1</msal4j.version>
-        <kafka.version>4.1.1</kafka.version>
-        <kafka.connect.avro.converter.version>8.1.1</kafka.connect.avro.converter.version>
+        <kafka.version>4.3.1</kafka.version>
+        <kafka.connect.avro.converter.version>8.3.2</kafka.connect.avro.converter.version>
         <!-- Previously transitive via kusto-sdk <= 7.0.3; required by TopicPartitionWriter retries -->
         <resilience4j.version>1.7.1</resilience4j.version>
         <vavr.version>0.10.4</vavr.version>
